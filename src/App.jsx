@@ -398,6 +398,19 @@ const AdminDashboard = ({
   const [tossDetails, setTossDetails] = useState({ winner: '', choice: 'Serve' });
   const [numGroups, setNumGroups] = useState(2);
 
+  // Sync localConfig with prop and ensure defaults
+  useEffect(() => {
+    setLocalConfig({
+      ...DEFAULT_CONFIG,
+      ...config,
+      matchRules: {
+        league: { ...DEFAULT_CONFIG.matchRules.league, ...(config.matchRules?.league || {}) },
+        playoff: { ...DEFAULT_CONFIG.matchRules.playoff, ...(config.matchRules?.playoff || {}) },
+        ...config.matchRules
+      }
+    });
+  }, [config]);
+
   const handleSaveRules = (e) => {
     e.preventDefault();
     updateConfig(localConfig);
@@ -759,15 +772,15 @@ const AdminDashboard = ({
                     <div className="grid grid-cols-3 gap-4">
                       <div>
                         <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Sets</label>
-                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules.league.sets} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, league: { ...localConfig.matchRules.league, sets: parseInt(e.target.value) } } })} />
+                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules?.league?.sets || 3} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, league: { ...(localConfig.matchRules?.league || {}), sets: parseInt(e.target.value) } } })} />
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Points</label>
-                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules.league.points} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, league: { ...localConfig.matchRules.league, points: parseInt(e.target.value) } } })} />
+                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules?.league?.points || 25} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, league: { ...(localConfig.matchRules?.league || {}), points: parseInt(e.target.value) } } })} />
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tie-Break</label>
-                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules.league.tieBreak} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, league: { ...localConfig.matchRules.league, tieBreak: parseInt(e.target.value) } } })} />
+                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules?.league?.tieBreak || 15} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, league: { ...(localConfig.matchRules?.league || {}), tieBreak: parseInt(e.target.value) } } })} />
                       </div>
                     </div>
                   </div>
@@ -880,7 +893,7 @@ export default function App() {
     const unsubMatches = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'matches'),
       (snap) => setMatches(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubConfig = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'main'),
-      (snap) => snap.exists() && setAppConfig(snap.data()));
+      (snap) => snap.exists() && setAppConfig({ ...DEFAULT_CONFIG, ...snap.data() }));
     return () => { unsubTeams(); unsubMatches(); unsubConfig(); };
   }, [user]);
 
