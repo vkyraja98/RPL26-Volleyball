@@ -306,16 +306,7 @@ const AdminScorer = ({ match, teams, config, handleScore, setView, updateDoc, db
   const target = Math.max(base, (maxScore >= base - 1 ? maxScore + 2 : base));
 
   // Swap Alert Logic
-  useEffect(() => {
-    if (!match || !config) return;
-
-    if (isDecider) {
-      const switchPoint = Math.ceil(base / 2);
-      if ((currentSet.a === switchPoint && currentSet.b < switchPoint) || (currentSet.b === switchPoint && currentSet.a < switchPoint)) {
-        alert("SWAP SIDES NOW! (Reached Switch Point)");
-      }
-    }
-  }, [currentScores, setIdx, config, match?.stage]);
+  // Swap Alert Logic - REMOVED per user request
 
   return (
     <div className="min-h-screen bg-slate-950 font-sans text-slate-100 flex flex-col relative overflow-hidden">
@@ -333,11 +324,7 @@ const AdminScorer = ({ match, teams, config, handleScore, setView, updateDoc, db
             <span className="text-2xl font-black text-white italic tracking-tighter">SET {setIdx}</span>
             <span className="px-3 py-1 bg-white/10 text-blue-300 text-xs font-bold rounded border border-white/10 uppercase tracking-wider">Target: {target}</span>
           </div>
-          {match.tossWinner && (
-            <div className="mt-1 text-[10px] text-slate-400 uppercase tracking-widest">
-              Toss: {getTeam(teams, match.tossWinner).name} chose {match.tossChoice}
-            </div>
-          )}
+
         </div>
         <button onClick={() => setSwapSides(!swapSides)} className="px-3 py-1 text-xs font-bold border border-white/20 rounded hover:bg-white/10">
           Swap Sides
@@ -962,17 +949,12 @@ export default function App() {
     });
   };
 
-  const startMatch = async (matchId, tossDetails = null) => {
+  const startMatch = async (matchId) => {
     if (!isAdmin) return;
     setScorerMatchId(matchId);
     const match = matches.find(m => m.id === matchId);
     if (match && match.status !== 'live') {
-      const update = { status: 'live' };
-      if (tossDetails) {
-        update.tossWinner = tossDetails.winner;
-        update.tossChoice = tossDetails.choice;
-      }
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', matchId), update);
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', matchId), { status: 'live' });
     }
     setView('admin-scorer');
   };
@@ -995,7 +977,7 @@ export default function App() {
     currentScores[currentSetIndex] = newSetScore;
 
     // RULE SELECTION
-    const stageRules = (config.matchRules && config.matchRules[match.stage]) || config.matchRules?.league || { sets: 3, points: 25, tieBreak: 15 };
+    const stageRules = (config?.matchRules && config.matchRules[match.stage]) || config?.matchRules?.league || { sets: 3, points: 25, tieBreak: 15 };
     const setsToWin = Math.ceil(stageRules.sets / 2);
 
     // Check if decider
@@ -1026,8 +1008,6 @@ export default function App() {
       } else if (newSetsA + newSetsB < stageRules.sets) {
         // Only create new set if match not finished and max sets not reached
         updates.scores = [...currentScores, { a: 0, b: 0 }];
-        // Auto-Alert for Set End swap
-        alert("Set Finished. Please SWAP SIDES.");
       }
     }
     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', scorerMatchId), updates);
