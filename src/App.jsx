@@ -35,7 +35,7 @@ const firebaseConfig = {
   storageBucket: "volleyball-manager-14e26.firebasestorage.app",
   messagingSenderId: "216415058710",
   appId: "1:216415058710:web:dca500703c7c1c2bd76e37",
-  measurementId: "G-76Z59K7S1L";
+  measurementId: "G-76Z59K7S1L"
 };
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
