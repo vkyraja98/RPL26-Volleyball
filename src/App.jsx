@@ -287,34 +287,31 @@ const AdminScorer = ({ match, teams, config, handleScore, setView, updateDoc, db
   const teamA = getTeam(teams, match.teamA);
   const teamB = getTeam(teams, match.teamB);
 
+  // Safe Scores Access
+  const currentScores = (match.scores && match.scores.length > 0) ? match.scores : [{ a: 0, b: 0 }];
+  const currentSet = currentScores[currentScores.length - 1] || { a: 0, b: 0 };
+
   // Visual Left/Right Helper
   const leftTeam = swapSides ? teamB : teamA;
   const rightTeam = swapSides ? teamA : teamB;
-  const leftScore = swapSides ? (match.scores[match.scores.length - 1]?.b || 0) : (match.scores[match.scores.length - 1]?.a || 0);
-  const rightScore = swapSides ? (match.scores[match.scores.length - 1]?.a || 0) : (match.scores[match.scores.length - 1]?.b || 0);
+  const leftScore = swapSides ? currentSet.b : currentSet.a;
+  const rightScore = swapSides ? currentSet.a : currentSet.b;
 
-  const currentScores = match.scores?.length > 0 ? match.scores : [{ a: 0, b: 0 }];
   const setIdx = currentScores.length;
-  // const scores = currentScores[setIdx - 1]; // Removed to use dynamic left/right
 
-  const stageRules = (config.matchRules && config.matchRules[match.stage]) || config.matchRules?.league || { sets: 3, points: 25, tieBreak: 15 };
+  const stageRules = (config?.matchRules && config.matchRules[match.stage]) || config?.matchRules?.league || { sets: 3, points: 25, tieBreak: 15 };
   const isDecider = setIdx === stageRules.sets;
   const base = isDecider ? stageRules.tieBreak : stageRules.points;
-  const maxScore = Math.max(currentScores[setIdx - 1]?.a || 0, currentScores[setIdx - 1]?.b || 0);
+  const maxScore = Math.max(currentSet.a, currentSet.b);
   const target = Math.max(base, (maxScore >= base - 1 ? maxScore + 2 : base));
 
   // Swap Alert Logic
   useEffect(() => {
-    if (!match || !config) return; // Guard
-    // Determine rules for this match
-    const stageRules = (config?.matchRules && config.matchRules[match.stage]) || config?.matchRules?.league || { sets: 3, points: 25, tieBreak: 15 };
-    const isDecidingSet = setIdx === stageRules.sets;
-    const base = isDecidingSet ? stageRules.tieBreak : stageRules.points;
+    if (!match || !config) return;
 
-    if (isDecidingSet) {
-      const switchPoint = Math.ceil(base / 2); // 8 for 15, 13 for 25
-      const current = currentScores[setIdx - 1];
-      if (current && ((current.a === switchPoint && current.b < switchPoint) || (current.b === switchPoint && current.a < switchPoint))) {
+    if (isDecider) {
+      const switchPoint = Math.ceil(base / 2);
+      if ((currentSet.a === switchPoint && currentSet.b < switchPoint) || (currentSet.b === switchPoint && currentSet.a < switchPoint)) {
         alert("SWAP SIDES NOW! (Reached Switch Point)");
       }
     }
@@ -985,7 +982,7 @@ export default function App() {
     const match = matches.find(m => m.id === scorerMatchId);
     if (!match || match.status === 'finished') return; // Prevent extra sets
 
-    let currentScores = [...match.scores];
+    let currentScores = match.scores ? [...match.scores] : [];
     if (currentScores.length === 0) currentScores.push({ a: 0, b: 0 });
 
     const currentSetIndex = currentScores.length - 1;
