@@ -280,17 +280,23 @@ const MatchCardPublic = ({ match, teams, players, config, isLiveFeature = false 
 
 // --- Admin Scorer ---
 const AdminScorer = ({ match, teams = [], config, handleScore, setView, updateDoc, db, appId }) => {
-  if (!match) return <div className="p-10 text-white">Loading Match...</div>;
-
   const [swapSides, setSwapSides] = useState(false); // Visual Only
+
+  // Safe Checks & Defaults to prevent Hooks violation
+  const safeMatch = match || { scores: [], teamA: '', teamB: '', stage: 'league' };
+  if (!match) {
+    // We still render hooks above, but return early here if data missing
+    // However, best practice is to condition the RENDER, not the HOOKS.
+    // Since we used hooks above, we can return now, but let's just use safe defaults for everything.
+  }
 
   // Safe Team Access
   const safeTeams = Array.isArray(teams) ? teams : [];
-  const teamA = getTeam(safeTeams, match.teamA);
-  const teamB = getTeam(safeTeams, match.teamB);
+  const teamA = getTeam(safeTeams, safeMatch.teamA);
+  const teamB = getTeam(safeTeams, safeMatch.teamB);
 
   // Safe Scores Access
-  const currentScores = (match.scores && match.scores.length > 0) ? match.scores : [{ a: 0, b: 0 }];
+  const currentScores = (safeMatch.scores && safeMatch.scores.length > 0) ? safeMatch.scores : [{ a: 0, b: 0 }];
   const currentSet = currentScores[currentScores.length - 1] || { a: 0, b: 0 };
 
   // Visual Left/Right Helper
@@ -301,7 +307,7 @@ const AdminScorer = ({ match, teams = [], config, handleScore, setView, updateDo
 
   const setIdx = currentScores.length;
 
-  const stageRules = (config?.matchRules && config.matchRules[match.stage]) || config?.matchRules?.league || { sets: 3, points: 25, tieBreak: 15 };
+  const stageRules = (config?.matchRules && config.matchRules[safeMatch.stage]) || config?.matchRules?.league || { sets: 3, points: 25, tieBreak: 15 };
   const isDecider = setIdx === stageRules.sets;
   const base = isDecider ? stageRules.tieBreak : stageRules.points;
   const maxScore = Math.max(currentSet.a, currentSet.b);
@@ -309,6 +315,9 @@ const AdminScorer = ({ match, teams = [], config, handleScore, setView, updateDo
 
   // Swap Alert Logic
   // Swap Alert Logic - REMOVED per user request
+
+  // Return early if no match data, but AFTER hooks and safe calculations
+  if (!match) return <div className="p-10 text-white">Loading Match...</div>;
 
   return (
     <div className="min-h-screen bg-slate-950 font-sans text-slate-100 flex flex-col relative overflow-hidden">
