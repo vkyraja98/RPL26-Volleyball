@@ -42,21 +42,23 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-// --- Default Rules Config ---
+// --- Helpers ---
+const getTeam = (teams, id) => teams.find(t => t.id === id) || { name: '...', color: 'bg-slate-700' };
+
+// --- Configuration ---
+// Update Config to support stage rules
 const DEFAULT_CONFIG = {
   pointsPerSet: 25,
   setsPerMatch: 3,
   tieBreakerPoints: 15,
   tournamentName: 'PRO VOLLEY LEAGUE 2024',
-  tournamentType: 'round-robin', // 'round-robin', 'group', 'knockout'
+  tournamentType: 'round-robin',
   matchRules: {
     league: { sets: 3, points: 25, tieBreak: 15 },
-    playoff: { sets: 5, points: 25, tieBreak: 15 }
+    semis: { sets: 5, points: 25, tieBreak: 15 },
+    final: { sets: 5, points: 25, tieBreak: 15 }
   }
 };
-
-// --- Helpers ---
-const getTeam = (teams, id) => teams.find(t => t.id === id) || { name: '...', color: 'bg-slate-700' };
 
 // --- Components ---
 
@@ -277,80 +279,98 @@ const MatchCardPublic = ({ match, teams, players, config, isLiveFeature = false 
 };
 
 // --- Admin Scorer ---
-const AdminScorer = ({ match, teams, config, handleScore, setView }) => {
+const AdminScorer = ({ match, teams, config, handleScore, setView, updateDoc, db, appId }) => {
   if (!match) return <div className="p-10 text-white">Loading Match...</div>;
+
+  const [swapSides, setSwapSides] = useState(false); // Visual Only
 
   const teamA = getTeam(teams, match.teamA);
   const teamB = getTeam(teams, match.teamB);
+
+  // Visual Left/Right Helper
+  const leftTeam = swapSides ? teamB : teamA;
+  const rightTeam = swapSides ? teamA : teamB;
+  const leftScore = swapSides ? (match.scores[match.scores.length - 1]?.b || 0) : (match.scores[match.scores.length - 1]?.a || 0);
+  const rightScore = swapSides ? (match.scores[match.scores.length - 1]?.a || 0) : (match.scores[match.scores.length - 1]?.b || 0);
+
   const currentScores = match.scores.length > 0 ? match.scores : [{ a: 0, b: 0 }];
   const setIdx = currentScores.length;
-  const scores = currentScores[setIdx - 1];
+  // const scores = currentScores[setIdx - 1]; // Removed to use dynamic left/right
+
   const isDecider = setIdx === config.setsPerMatch;
   const base = isDecider ? config.tieBreakerPoints : config.pointsPerSet;
-  const maxScore = Math.max(scores.a, scores.b);
+  const maxScore = Math.max(currentScores[setIdx - 1].a, currentScores[setIdx - 1].b);
   const target = Math.max(base, (maxScore >= base - 1 ? maxScore + 2 : base));
+
+  // Swap Alert Logic
+  useEffect(() => {
+    if (isDecider) {
+      const switchPoint = Math.ceil(base / 2); // 8 for 15, 13 for 25
+      const current = currentScores[setIdx - 1];
+      if ((current.a === switchPoint && current.b < switchPoint) || (current.b === switchPoint && current.a < switchPoint)) {
+        alert("SWAP SIDES NOW! (Reached Switch Point)");
+      }
+    }
+  }, [currentScores, isDecider, base, setIdx]);
 
   return (
     <div className="min-h-screen bg-slate-950 font-sans text-slate-100 flex flex-col relative overflow-hidden">
-      {/* Dynamic Background for Scorer */}
+      {/* Background Elements */}
       <div className="absolute top-0 left-0 w-full h-full bg-slate-950 pointer-events-none" />
-      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-900/10 rounded-full blur-[100px] pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-red-900/10 rounded-full blur-[100px] pointer-events-none" />
 
       {/* Header */}
       <div className="relative z-10 bg-slate-900/80 backdrop-blur-md border-b border-white/10 px-6 py-4 flex justify-between items-center shadow-lg">
         <button onClick={() => setView('admin-dashboard')} className="flex items-center gap-2 text-slate-400 hover:text-white font-bold transition-colors">
-          <ArrowLeft size={20} /> Exit Scorer
+          <ArrowLeft size={20} /> Exit
         </button>
         <div className="flex flex-col items-center">
-          <span className="text-xs font-bold text-red-500 uppercase tracking-[0.2em] animate-pulse">Live Match Control</span>
+          <span className="text-xs font-bold text-red-500 uppercase tracking-[0.2em] animate-pulse">Live</span>
           <div className="flex items-center gap-4 mt-1">
             <span className="text-2xl font-black text-white italic tracking-tighter">SET {setIdx}</span>
             <span className="px-3 py-1 bg-white/10 text-blue-300 text-xs font-bold rounded border border-white/10 uppercase tracking-wider">Target: {target}</span>
           </div>
+          {match.tossWinner && (
+            <div className="mt-1 text-[10px] text-slate-400 uppercase tracking-widest">
+              Toss: {getTeam(teams, match.tossWinner).name} chose {match.tossChoice}
+            </div>
+          )}
         </div>
-        <div className="w-24"></div>
+        <button onClick={() => setSwapSides(!swapSides)} className="px-3 py-1 text-xs font-bold border border-white/20 rounded hover:bg-white/10">
+          Swap Sides
+        </button>
       </div>
 
-      {/* Main Controls */}
+      {/* Main Controls - Dynamic Left/Right */}
       <div className="relative z-10 flex-1 grid grid-cols-2">
-        {/* Team A */}
+        {/* LEFT SIDE */}
         <div
-          onClick={() => handleScore('A')}
+          onClick={() => handleScore(swapSides ? 'B' : 'A')}
           className="relative flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 active:bg-blue-600/20 transition-all border-r border-white/10 select-none group"
         >
-          <div className={`absolute top-0 left-0 right-0 h-2 ${teamA.color} shadow-[0_0_20px_rgba(0,0,0,0.5)]`} />
-          <h2 className="text-2xl md:text-4xl font-black text-white mb-8 uppercase tracking-wide opacity-50 group-hover:opacity-100 transition-opacity">{teamA.name}</h2>
+          <div className={`absolute top-0 left-0 right-0 h-2 ${leftTeam.color} shadow-[0_0_20px_rgba(0,0,0,0.5)]`} />
+          <h2 className="text-2xl md:text-4xl font-black text-white mb-8 uppercase tracking-wide opacity-50 group-hover:opacity-100 transition-opacity">{leftTeam.name}</h2>
           <div className="text-[120px] md:text-[220px] font-black text-white leading-none tracking-tighter tabular-nums drop-shadow-2xl group-active:scale-95 transition-transform group-active:text-blue-400">
-            {scores.a}
-          </div>
-          <div className="mt-12 flex flex-col items-center gap-2">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-[0.2em]">Total Sets</span>
-            <span className="bg-slate-800 border border-white/10 text-white px-6 py-2 rounded-xl text-3xl font-black">{match.setsA}</span>
+            {leftScore}
           </div>
         </div>
 
-        {/* Team B */}
+        {/* RIGHT SIDE */}
         <div
-          onClick={() => handleScore('B')}
+          onClick={() => handleScore(swapSides ? 'A' : 'B')}
           className="relative flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 active:bg-red-600/20 transition-all select-none group"
         >
-          <div className={`absolute top-0 left-0 right-0 h-2 ${teamB.color} shadow-[0_0_20px_rgba(0,0,0,0.5)]`} />
-          <h2 className="text-2xl md:text-4xl font-black text-white mb-8 uppercase tracking-wide opacity-50 group-hover:opacity-100 transition-opacity">{teamB.name}</h2>
+          <div className={`absolute top-0 left-0 right-0 h-2 ${rightTeam.color} shadow-[0_0_20px_rgba(0,0,0,0.5)]`} />
+          <h2 className="text-2xl md:text-4xl font-black text-white mb-8 uppercase tracking-wide opacity-50 group-hover:opacity-100 transition-opacity">{rightTeam.name}</h2>
           <div className="text-[120px] md:text-[220px] font-black text-white leading-none tracking-tighter tabular-nums drop-shadow-2xl group-active:scale-95 transition-transform group-active:text-red-400">
-            {scores.b}
-          </div>
-          <div className="mt-12 flex flex-col items-center gap-2">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-[0.2em]">Total Sets</span>
-            <span className="bg-slate-800 border border-white/10 text-white px-6 py-2 rounded-xl text-3xl font-black">{match.setsB}</span>
+            {rightScore}
           </div>
         </div>
       </div>
 
       {/* Footer Actions */}
       <div className="relative z-10 bg-slate-900/80 backdrop-blur-md border-t border-white/10 p-6 flex justify-center gap-4">
-        <button onClick={() => alert("Undo requires history implementation")} className="flex items-center gap-2 px-8 py-4 bg-white/5 hover:bg-white/10 text-slate-300 rounded-xl font-bold transition-all border border-white/5 uppercase tracking-wider text-sm">
-          <ArrowLeft size={18} /> Undo Last Point
+        <button className="flex items-center gap-2 px-8 py-4 bg-white/5 hover:bg-white/10 text-slate-300 rounded-xl font-bold transition-all border border-white/5 uppercase tracking-wider text-sm">
+          <ArrowLeft size={18} /> Undo
         </button>
       </div>
     </div>
@@ -364,13 +384,52 @@ const AdminDashboard = ({
 }) => {
   const [newItem, setNewItem] = useState('');
   const [newPlayer, setNewPlayer] = useState({ name: '', teamId: '', isCaptain: false });
-  const [fixture, setFixture] = useState({ ta: '', tb: '', d: '', t: '' });
+  const [csvFile, setCsvFile] = useState(null);
+  const [fixture, setFixture] = useState({ ta: '', tb: '', d: '', t: '', stage: 'league' });
   const [localConfig, setLocalConfig] = useState(config);
+  const [showTossModal, setShowTossModal] = useState(false);
+  const [selectedMatch, setSelectedMatch] = useState(null);
+  const [tossDetails, setTossDetails] = useState({ winner: '', choice: 'Serve' });
+  const [numGroups, setNumGroups] = useState(2);
 
   const handleSaveRules = (e) => {
     e.preventDefault();
     updateConfig(localConfig);
     alert("Rules updated!");
+  };
+
+  const processCSV = (e) => {
+    e.preventDefault();
+    if (!csvFile) return;
+
+    const reader = new FileReader();
+    reader.onload = function (event) {
+      const text = event.target.result;
+      const rows = text.split('\n').slice(1); // Skip header
+      let count = 0;
+
+      rows.forEach(row => {
+        const cols = row.split(',');
+        if (cols.length >= 2) {
+          const name = cols[0].trim();
+          const teamName = cols[1].trim();
+          const isCapt = cols[2]?.trim().toLowerCase() === 'true';
+
+          const team = teams.find(t => t.name.toLowerCase() === teamName.toLowerCase());
+          if (name && team) {
+            addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'players'), {
+              name: name,
+              teamId: team.id,
+              isCaptain: isCapt
+            });
+            count++;
+          }
+        }
+      });
+      alert(`Imported ${count} players successfully!`);
+      setCsvFile(null);
+    };
+    reader.readAsText(csvFile);
   };
 
   const generateFixtures = () => {
@@ -379,19 +438,56 @@ const AdminDashboard = ({
       const teamIds = teams.map(t => t.id);
       for (let i = 0; i < teamIds.length; i++) {
         for (let j = i + 1; j < teamIds.length; j++) {
-          // Basic Round Robin: Each plays each once
           generated.push({
             teamA: teamIds[i],
             teamB: teamIds[j],
             date: new Date().toISOString().split('T')[0],
-            time: '18:00'
+            time: '18:00',
+            stage: 'league'
           });
         }
       }
       generated.forEach(g => createFixture(g));
       alert(`Generated ${generated.length} matches!`);
+    } else if (config.tournamentType === 'group') {
+      const groups = Array.from({ length: numGroups }, () => []);
+      teams.forEach((team, idx) => {
+        groups[idx % numGroups].push(team.id);
+      });
+
+      let generated = 0;
+      groups.forEach((groupTeams, gIdx) => {
+        for (let i = 0; i < groupTeams.length; i++) {
+          for (let j = i + 1; j < groupTeams.length; j++) {
+            createFixture({
+              teamA: groupTeams[i],
+              teamB: groupTeams[j],
+              date: new Date().toISOString().split('T')[0],
+              time: '18:00',
+              stage: `Group ${String.fromCharCode(65 + gIdx)}`
+            });
+            generated++;
+          }
+        }
+      });
+      alert(`Generated ${generated} matches across ${numGroups} groups!`);
     } else {
-      alert("Only Round Robin generation is currently supported.");
+      alert("Only Round Robin & Group generation supported.");
+    }
+  };
+
+  const handleStartMatchClick = (match) => {
+    setSelectedMatch(match);
+    setShowTossModal(true);
+  };
+
+  const confirmStartMatch = () => {
+    if (selectedMatch && tossDetails.winner) {
+      startMatch(selectedMatch.id, tossDetails);
+      setShowTossModal(false);
+      setTossDetails({ winner: '', choice: 'Serve' });
+    } else {
+      alert("Please select Toss Winner");
     }
   };
 
@@ -434,13 +530,22 @@ const AdminDashboard = ({
                 <AdminGlassCard className="p-6">
                   <div className="flex justify-between items-center mb-6">
                     <h3 className="font-bold text-lg text-white">Schedule New Match</h3>
-                    <button onClick={generateFixtures} className="text-xs bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded font-bold uppercase tracking-wider">Auto-Generate Fixtures</button>
+                    <div className="flex gap-2">
+                      {config.tournamentType === 'group' && (
+                        <select className="bg-slate-800 text-white text-xs p-2 rounded" value={numGroups} onChange={e => setNumGroups(parseInt(e.target.value))}>
+                          <option value={2}>2 Groups</option>
+                          <option value={3}>3 Groups</option>
+                          <option value={4}>4 Groups</option>
+                        </select>
+                      )}
+                      <button onClick={generateFixtures} className="text-xs bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded font-bold uppercase tracking-wider">Auto-Generate Fixtures</button>
+                    </div>
                   </div>
                   <form onSubmit={(e) => {
                     e.preventDefault();
                     if (fixture.ta && fixture.tb && fixture.ta !== fixture.tb) {
-                      createFixture({ teamA: fixture.ta, teamB: fixture.tb, date: fixture.d, time: fixture.t });
-                      setFixture({ ta: '', tb: '', d: '', t: '' });
+                      createFixture({ teamA: fixture.ta, teamB: fixture.tb, date: fixture.d, time: fixture.t, stage: fixture.stage });
+                      setFixture({ ta: '', tb: '', d: '', t: '', stage: 'league' });
                     }
                   }} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
@@ -471,7 +576,7 @@ const AdminDashboard = ({
                       <div className="flex gap-2">
                         {/* Only show Start/Resume if not finished */}
                         {m.status !== 'finished' && (
-                          <button onClick={() => startMatch(m.id)} className="px-4 py-2 bg-green-500 hover:bg-green-400 text-white rounded font-bold text-xs uppercase tracking-wider shadow-lg shadow-green-500/20">
+                          <button onClick={() => m.status === 'live' ? startMatch(m.id) : handleStartMatchClick(m)} className="px-4 py-2 bg-green-500 hover:bg-green-400 text-white rounded font-bold text-xs uppercase tracking-wider shadow-lg shadow-green-500/20">
                             {m.status === 'live' ? 'Resume' : 'Start Match'}
                           </button>
                         )}
@@ -521,6 +626,16 @@ const AdminDashboard = ({
             {/* PLAYERS TAB */}
             {adminTab === 'players' && (
               <>
+                {/* CSV Import */}
+                <AdminGlassCard className="p-6 mb-4">
+                  <h3 className="font-bold text-lg mb-2 text-white">Bulk Import Players</h3>
+                  <p className="text-xs text-slate-400 mb-4">Upload CSV with headers: <code>Name, Team Name, IsCaptain (true/false)</code></p>
+                  <form onSubmit={processCSV} className="flex gap-4">
+                    <input type="file" accept=".csv" onChange={e => setCsvFile(e.target.files[0])} className="text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-500" />
+                    <button type="submit" disabled={!csvFile} className="px-4 py-2 bg-green-600 disabled:bg-slate-700 text-white rounded text-xs font-bold uppercase tracking-wider">Import CSV</button>
+                  </form>
+                </AdminGlassCard>
+
                 {/* Add Player Form */}
                 <AdminGlassCard className="p-6">
                   <h3 className="font-bold text-lg mb-4 text-white">Add New Player</h3>
@@ -663,7 +778,48 @@ const AdminDashboard = ({
           </div>
         </div>
       </div>
+      {/* Toss Modal */}
+      {showTossModal && activeTab && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <AdminGlassCard className="w-full max-w-md p-8">
+            <h3 className="text-2xl font-black text-white mb-6 uppercase tracking-wide">Match Protocol</h3>
+            <div className="space-y-6">
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Who won the toss?</label>
+                <div className="grid grid-cols-2 gap-4">
+                  <button onClick={() => setTossDetails({ ...tossDetails, winner: selectedMatch.teamA })} className={`p-4 rounded-xl font-bold border ${tossDetails.winner === selectedMatch.teamA ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
+                    {getTeam(teams, selectedMatch.teamA).name}
+                  </button>
+                  <button onClick={() => setTossDetails({ ...tossDetails, winner: selectedMatch.teamB })} className={`p-4 rounded-xl font-bold border ${tossDetails.winner === selectedMatch.teamB ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
+                    {getTeam(teams, selectedMatch.teamB).name}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Choice</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 text-white cursor-pointer">
+                    <input type="radio" name="choice" checked={tossDetails.choice === 'Serve'} onChange={() => setTossDetails({ ...tossDetails, choice: 'Serve' })} className="w-4 h-4 text-blue-600 bg-slate-800 border-slate-600 focus:ring-blue-500" />
+                    <span className="font-bold">To Serve</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-white cursor-pointer">
+                    <input type="radio" name="choice" checked={tossDetails.choice === 'Court'} onChange={() => setTossDetails({ ...tossDetails, choice: 'Court' })} className="w-4 h-4 text-blue-600 bg-slate-800 border-slate-600 focus:ring-blue-500" />
+                    <span className="font-bold">Choice of Court</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-8">
+                <button onClick={() => setShowTossModal(false)} className="flex-1 py-3 bg-slate-700 text-white font-bold rounded-lg uppercase tracking-wider text-xs hover:bg-slate-600">Cancel</button>
+                <button onClick={confirmStartMatch} className="flex-1 py-3 bg-green-600 text-white font-bold rounded-lg uppercase tracking-wider text-xs hover:bg-green-500 shadow-lg shadow-green-600/20">Start Match</button>
+              </div>
+            </div>
+          </AdminGlassCard>
+        </div>
+      )}
     </div>
+    </div >
   );
 };
 
@@ -736,18 +892,25 @@ export default function App() {
     });
   };
 
-  const startMatch = async (matchId) => {
+  const startMatch = async (matchId, tossDetails = null) => {
     if (!isAdmin) return;
     setScorerMatchId(matchId);
     const match = matches.find(m => m.id === matchId);
-    if (match && match.status !== 'live') await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', matchId), { status: 'live' });
+    if (match && match.status !== 'live') {
+      const update = { status: 'live' };
+      if (tossDetails) {
+        update.tossWinner = tossDetails.winner;
+        update.tossChoice = tossDetails.choice;
+      }
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', matchId), update);
+    }
     setView('admin-scorer');
   };
 
   // --- Scorer Engine ---
   const handleScore = async (team) => {
     const match = matches.find(m => m.id === scorerMatchId);
-    if (!match) return;
+    if (!match || match.status === 'finished') return; // Prevent extra sets
 
     let currentScores = [...match.scores];
     if (currentScores.length === 0) currentScores.push({ a: 0, b: 0 });
@@ -785,8 +948,11 @@ export default function App() {
         updates.status = 'finished';
         updates.winner = match.teamB;
         setTimeout(() => setView('admin-dashboard'), 2000);
-      } else {
+      } else if (newSetsA + newSetsB < config.setsPerMatch) {
+        // Only create new set if match not finished and max sets not reached
         updates.scores = [...currentScores, { a: 0, b: 0 }];
+        // Auto-Alert for Set End swap
+        alert("Set Finished. Please SWAP SIDES.");
       }
     }
     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', scorerMatchId), updates);
