@@ -47,7 +47,12 @@ const DEFAULT_CONFIG = {
   pointsPerSet: 25,
   setsPerMatch: 3,
   tieBreakerPoints: 15,
-  tournamentName: 'PRO VOLLEY LEAGUE 2024'
+  tournamentName: 'PRO VOLLEY LEAGUE 2024',
+  tournamentType: 'round-robin', // 'round-robin', 'group', 'knockout'
+  matchRules: {
+    league: { sets: 3, points: 25, tieBreak: 15 },
+    playoff: { sets: 5, points: 25, tieBreak: 15 }
+  }
 };
 
 // --- Helpers ---
@@ -69,6 +74,13 @@ const GlassCard = ({ children, className = '' }) => (
   </div>
 );
 
+// Admin Glass Card (Darker for readability)
+const AdminGlassCard = ({ children, className = '' }) => (
+  <div className={`relative overflow-hidden bg-slate-900/80 backdrop-blur-md border border-white/10 shadow-xl rounded-xl ${className}`}>
+    {children}
+  </div>
+);
+
 const Badge = ({ status }) => {
   const styles = {
     live: 'bg-red-500 text-white animate-pulse border-red-400 shadow-[0_0_15px_rgba(239,68,68,0.5)]',
@@ -84,18 +96,18 @@ const Badge = ({ status }) => {
 
 // --- Navigation ---
 const Navigation = ({ config, view, setView, isAdmin }) => (
-  <nav className={`sticky top-0 z-50 transition-all duration-300 ${view === 'public' ? 'bg-slate-950/80 backdrop-blur-lg border-b border-white/5' : 'bg-slate-900 shadow-md'}`}>
+  <nav className={`sticky top-0 z-50 transition-all duration-300 ${view === 'public' ? 'bg-slate-950/80 backdrop-blur-lg border-b border-white/5' : 'bg-slate-950/90 backdrop-blur-md border-b border-white/5 shadow-md'}`}>
     <div className="max-w-6xl mx-auto px-4 h-20 flex items-center justify-between">
       <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setView('public')}>
-        <div className={`p-2 rounded-lg transform transition-transform group-hover:scale-110 ${view === 'public' ? 'bg-gradient-to-br from-pink-500 to-orange-500 shadow-lg' : 'bg-orange-500'}`}>
+        <div className={`p-2 rounded-lg transform transition-transform group-hover:scale-110 ${view === 'public' ? 'bg-gradient-to-br from-pink-500 to-orange-500 shadow-lg' : 'bg-gradient-to-br from-blue-600 to-indigo-600 shadow-lg'}`}>
           <Trophy size={24} className="text-white" />
         </div>
         <div className="flex flex-col">
-          <span className={`font-black text-xl tracking-tighter uppercase leading-none ${view === 'public' ? 'text-white' : 'text-slate-100'}`}>
+          <span className="font-black text-xl tracking-tighter uppercase leading-none text-white">
             {config.tournamentName}
           </span>
-          <span className={`text-[10px] font-bold tracking-[0.2em] uppercase ${view === 'public' ? 'text-blue-400' : 'text-slate-400'}`}>
-            Official Hub
+          <span className={`text-[10px] font-bold tracking-[0.2em] uppercase ${view === 'public' ? 'text-blue-400' : 'text-blue-300'}`}>
+            {view === 'public' ? 'Official Hub' : 'Admin Console'}
           </span>
         </div>
       </div>
@@ -113,7 +125,7 @@ const Navigation = ({ config, view, setView, isAdmin }) => (
         <button
           onClick={() => isAdmin ? setView('admin-dashboard') : setView('login')}
           className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${view.startsWith('admin') || view === 'login'
-            ? 'bg-blue-600 text-white shadow-lg'
+            ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/50'
             : 'text-slate-400 hover:text-white'
             }`}
         >
@@ -167,7 +179,7 @@ const LoginView = ({ loginInput, setLoginInput, handleAdminLogin, setView }) => 
 );
 
 // --- Match Card Public ---
-const MatchCardPublic = ({ match, teams, players, config }) => {
+const MatchCardPublic = ({ match, teams, players, config, isLiveFeature = false }) => {
   const teamA = getTeam(teams, match.teamA);
   const teamB = getTeam(teams, match.teamB);
   const captainA = players.find(p => p.teamId === match.teamA && p.isCaptain);
@@ -175,26 +187,29 @@ const MatchCardPublic = ({ match, teams, players, config }) => {
   const date = new Date(match.startTime);
 
   return (
-    <GlassCard className="group hover:bg-slate-800/50 transition-colors">
+    <GlassCard className={`group hover:bg-slate-800/50 transition-colors ${isLiveFeature ? 'border-blue-500/30' : ''}`}>
       {/* Header */}
-      <div className="bg-white/5 px-4 py-2 flex justify-between items-center border-b border-white/5">
+      <div className="bg-white/5 px-4 py-3 flex justify-between items-center border-b border-white/5">
         <div className="flex items-center gap-2">
-          <span className="text-white/40 text-[10px] font-bold uppercase tracking-widest">{config.tournamentName}</span>
+          <Trophy size={12} className="text-blue-400" />
+          <span className="text-blue-200/50 text-[10px] font-black uppercase tracking-[0.2em]">{config.tournamentName}</span>
         </div>
         <Badge status={match.status} />
       </div>
 
       {/* Content */}
-      <div className="p-6 relative">
+      <div className={`relative ${isLiveFeature ? 'p-8 md:p-12' : 'p-6'}`}>
         <div className="flex justify-between items-center relative z-10">
           {/* Team A */}
-          <div className="flex flex-col items-center gap-3 w-1/3">
-            <div className={`w-16 h-16 rounded-2xl ${teamA.color} shadow-[0_0_20px_rgba(0,0,0,0.5)] flex items-center justify-center text-white font-black text-3xl transform group-hover:scale-105 transition-transform border-2 border-white/10`}>
+          <div className="flex flex-col items-center gap-4 w-1/3">
+            <div className={`relative ${isLiveFeature ? 'w-24 h-24 md:w-32 md:h-32 text-5xl md:text-6xl' : 'w-16 h-16 text-3xl'} rounded-2xl ${teamA.color} shadow-[0_0_30px_rgba(0,0,0,0.5)] flex items-center justify-center text-white font-black transform transition-transform border-4 border-white/10`}>
               {teamA.name[0]}
+              {/* Winner Indicator */}
+              {match.winner === match.teamA && <div className="absolute -top-3 -right-3 bg-yellow-400 text-black p-1 rounded-full shadow-lg border-2 border-white"><Trophy size={14} /></div>}
             </div>
             <div className="text-center">
-              <h3 className="text-white font-bold uppercase tracking-wide leading-tight text-sm md:text-base">{teamA.name}</h3>
-              {captainA && <div className="text-[10px] text-yellow-400 font-bold uppercase tracking-widest mt-1">Has Captain: {captainA.name}</div>}
+              <h3 className={`text-white font-black uppercase tracking-wide leading-none ${isLiveFeature ? 'text-xl md:text-3xl mb-2' : 'text-sm md:text-base'}`}>{teamA.name}</h3>
+              {captainA && <div className="text-[10px] text-yellow-400 font-bold uppercase tracking-widest bg-yellow-400/10 px-2 py-0.5 rounded-full inline-block">Captain: {captainA.name}</div>}
             </div>
           </div>
 
@@ -202,22 +217,27 @@ const MatchCardPublic = ({ match, teams, players, config }) => {
           <div className="flex flex-col items-center justify-center w-1/3">
             {match.status === 'scheduled' ? (
               <div className="text-center">
-                <div className="text-4xl font-black text-white/20 italic tracking-tighter">VS</div>
-                <div className="mt-2 flex flex-col items-center text-blue-400">
-                  <Calendar size={14} className="mb-1" />
-                  <span className="text-xs font-bold uppercase tracking-wider">{date.toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
-                  <span className="text-xs font-mono">{date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                <div className="text-4xl md:text-6xl font-black text-white/10 italic tracking-tighter">VS</div>
+                <div className="mt-4 flex flex-col items-center text-blue-400">
+                  <div className="flex items-center gap-1 mb-1">
+                    <Calendar size={14} />
+                    <span className="text-xs font-bold uppercase tracking-wider">{date.toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
+                  </div>
+                  <div className="bg-slate-900/50 px-3 py-1 rounded text-white font-mono text-sm border border-white/10">
+                    {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
                 </div>
               </div>
             ) : (
               <div className="flex flex-col items-center">
-                <div className="flex items-center gap-4">
-                  <span className={`text-4xl md:text-5xl font-black ${match.winner === match.teamA ? 'text-green-400 drop-shadow-[0_0_10px_rgba(74,222,128,0.5)]' : 'text-white'}`}>{match.setsA}</span>
-                  <span className="text-white/20 text-2xl font-black">-</span>
-                  <span className={`text-4xl md:text-5xl font-black ${match.winner === match.teamB ? 'text-green-400 drop-shadow-[0_0_10px_rgba(74,222,128,0.5)]' : 'text-white'}`}>{match.setsB}</span>
+                <div className="flex items-center gap-4 md:gap-8">
+                  <span className={`${isLiveFeature ? 'text-6xl md:text-8xl' : 'text-4xl md:text-5xl'} font-black ${match.winner === match.teamA ? 'text-green-400 drop-shadow-[0_0_15px_rgba(74,222,128,0.5)]' : 'text-white'}`}>{match.setsA}</span>
+                  <span className={`text-white/20 font-black ${isLiveFeature ? 'text-4xl md:text-6xl' : 'text-2xl'}`}>-</span>
+                  <span className={`${isLiveFeature ? 'text-6xl md:text-8xl' : 'text-4xl md:text-5xl'} font-black ${match.winner === match.teamB ? 'text-green-400 drop-shadow-[0_0_15px_rgba(74,222,128,0.5)]' : 'text-white'}`}>{match.setsB}</span>
                 </div>
                 {match.status === 'live' && (
-                  <div className="mt-2 px-3 py-1 bg-red-500/20 border border-red-500/50 rounded text-red-400 text-[10px] font-black uppercase tracking-widest animate-pulse">
+                  <div className="mt-4 px-4 py-1.5 bg-red-500 text-white rounded-full text-xs font-black uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(239,68,68,0.4)] animate-pulse flex items-center gap-2">
+                    <span className="w-2 h-2 bg-white rounded-full animate-ping" />
                     Set {match.scores.length}
                   </div>
                 )}
@@ -226,24 +246,25 @@ const MatchCardPublic = ({ match, teams, players, config }) => {
           </div>
 
           {/* Team B */}
-          <div className="flex flex-col items-center gap-3 w-1/3">
-            <div className={`w-16 h-16 rounded-2xl ${teamB.color} shadow-[0_0_20px_rgba(0,0,0,0.5)] flex items-center justify-center text-white font-black text-3xl transform group-hover:scale-105 transition-transform border-2 border-white/10`}>
+          <div className="flex flex-col items-center gap-4 w-1/3">
+            <div className={`relative ${isLiveFeature ? 'w-24 h-24 md:w-32 md:h-32 text-5xl md:text-6xl' : 'w-16 h-16 text-3xl'} rounded-2xl ${teamB.color} shadow-[0_0_30px_rgba(0,0,0,0.5)] flex items-center justify-center text-white font-black transform transition-transform border-4 border-white/10`}>
               {teamB.name[0]}
+              {match.winner === match.teamB && <div className="absolute -top-3 -right-3 bg-yellow-400 text-black p-1 rounded-full shadow-lg border-2 border-white"><Trophy size={14} /></div>}
             </div>
             <div className="text-center">
-              <h3 className="text-white font-bold uppercase tracking-wide leading-tight text-sm md:text-base">{teamB.name}</h3>
-              {captainB && <div className="text-[10px] text-yellow-400 font-bold uppercase tracking-widest mt-1">Has Captain: {captainB.name}</div>}
+              <h3 className={`text-white font-black uppercase tracking-wide leading-none ${isLiveFeature ? 'text-xl md:text-3xl mb-2' : 'text-sm md:text-base'}`}>{teamB.name}</h3>
+              {captainB && <div className="text-[10px] text-yellow-400 font-bold uppercase tracking-widest bg-yellow-400/10 px-2 py-0.5 rounded-full inline-block">Captain: {captainB.name}</div>}
             </div>
           </div>
         </div>
 
         {/* Set Scores Detail */}
         {(match.status === 'finished' || match.status === 'live') && match.scores && (
-          <div className="mt-6 flex justify-center gap-1">
+          <div className="mt-8 flex justify-center gap-2">
             {match.scores.map((set, idx) => (
-              <div key={idx} className="flex flex-col items-center bg-black/20 rounded px-2 py-1 min-w-[40px] border border-white/5">
-                <span className="text-[9px] text-white/40 font-bold uppercase mb-1">Set {idx + 1}</span>
-                <span className="text-sm font-mono font-bold text-white tracking-widest">
+              <div key={idx} className={`flex flex-col items-center rounded-lg px-3 py-2 min-w-[50px] border ${isLiveFeature ? 'bg-white/10 border-white/20' : 'bg-black/20 border-white/5'}`}>
+                <span className="text-[10px] text-white/60 font-bold uppercase mb-1">Set {idx + 1}</span>
+                <span className={`font-mono font-bold text-white tracking-widest ${isLiveFeature ? 'text-xl' : 'text-sm'}`}>
                   {set.a}-{set.b}
                 </span>
               </div>
@@ -257,73 +278,78 @@ const MatchCardPublic = ({ match, teams, players, config }) => {
 
 // --- Admin Scorer ---
 const AdminScorer = ({ match, teams, config, handleScore, setView }) => {
-  if (!match) return <div className="p-10">Loading Match...</div>;
+  if (!match) return <div className="p-10 text-white">Loading Match...</div>;
 
   const teamA = getTeam(teams, match.teamA);
   const teamB = getTeam(teams, match.teamB);
   const currentScores = match.scores.length > 0 ? match.scores : [{ a: 0, b: 0 }];
   const setIdx = currentScores.length;
   const scores = currentScores[setIdx - 1];
-
-  // Calculate Target
   const isDecider = setIdx === config.setsPerMatch;
   const base = isDecider ? config.tieBreakerPoints : config.pointsPerSet;
   const maxScore = Math.max(scores.a, scores.b);
   const target = Math.max(base, (maxScore >= base - 1 ? maxScore + 2 : base));
 
   return (
-    <div className="h-[calc(100vh-80px)] bg-slate-100 flex flex-col">
+    <div className="min-h-screen bg-slate-950 font-sans text-slate-100 flex flex-col relative overflow-hidden">
+      {/* Dynamic Background for Scorer */}
+      <div className="absolute top-0 left-0 w-full h-full bg-slate-950 pointer-events-none" />
+      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-900/10 rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-red-900/10 rounded-full blur-[100px] pointer-events-none" />
+
       {/* Header */}
-      <div className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm">
-        <button onClick={() => setView('admin-dashboard')} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 font-bold">
+      <div className="relative z-10 bg-slate-900/80 backdrop-blur-md border-b border-white/10 px-6 py-4 flex justify-between items-center shadow-lg">
+        <button onClick={() => setView('admin-dashboard')} className="flex items-center gap-2 text-slate-400 hover:text-white font-bold transition-colors">
           <ArrowLeft size={20} /> Exit Scorer
         </button>
         <div className="flex flex-col items-center">
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Live Match Control</span>
+          <span className="text-xs font-bold text-red-500 uppercase tracking-[0.2em] animate-pulse">Live Match Control</span>
           <div className="flex items-center gap-4 mt-1">
-            <span className="text-2xl font-black text-slate-800">SET {setIdx}</span>
-            <span className="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs font-bold rounded border border-yellow-200">Target: {target}</span>
+            <span className="text-2xl font-black text-white italic tracking-tighter">SET {setIdx}</span>
+            <span className="px-3 py-1 bg-white/10 text-blue-300 text-xs font-bold rounded border border-white/10 uppercase tracking-wider">Target: {target}</span>
           </div>
         </div>
-        <div className="w-24"></div> {/* Spacer */}
+        <div className="w-24"></div>
       </div>
 
       {/* Main Controls */}
-      <div className="flex-1 grid grid-cols-2">
+      <div className="relative z-10 flex-1 grid grid-cols-2">
         {/* Team A */}
         <div
           onClick={() => handleScore('A')}
-          className="relative flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 active:bg-slate-200 transition-colors border-r border-slate-200 select-none group"
+          className="relative flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 active:bg-blue-600/20 transition-all border-r border-white/10 select-none group"
         >
-          <div className={`absolute top-0 left-0 right-0 h-4 ${teamA.color}`} />
-          <h2 className="text-3xl font-bold text-slate-700 mb-6 uppercase tracking-tight">{teamA.name}</h2>
-          <div className="text-[180px] font-black text-slate-900 leading-none tracking-tighter tabular-nums group-active:scale-95 transition-transform">
+          <div className={`absolute top-0 left-0 right-0 h-2 ${teamA.color} shadow-[0_0_20px_rgba(0,0,0,0.5)]`} />
+          <h2 className="text-2xl md:text-4xl font-black text-white mb-8 uppercase tracking-wide opacity-50 group-hover:opacity-100 transition-opacity">{teamA.name}</h2>
+          <div className="text-[120px] md:text-[220px] font-black text-white leading-none tracking-tighter tabular-nums drop-shadow-2xl group-active:scale-95 transition-transform group-active:text-blue-400">
             {scores.a}
           </div>
-          <div className="mt-8 flex items-center gap-2 text-slate-400 font-bold uppercase tracking-widest">
-            Sets Won <span className="bg-slate-800 text-white px-3 py-1 rounded-full text-lg">{match.setsA}</span>
+          <div className="mt-12 flex flex-col items-center gap-2">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-[0.2em]">Total Sets</span>
+            <span className="bg-slate-800 border border-white/10 text-white px-6 py-2 rounded-xl text-3xl font-black">{match.setsA}</span>
           </div>
         </div>
 
         {/* Team B */}
         <div
           onClick={() => handleScore('B')}
-          className="relative flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 active:bg-slate-200 transition-colors select-none group"
+          className="relative flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 active:bg-red-600/20 transition-all select-none group"
         >
-          <div className={`absolute top-0 left-0 right-0 h-4 ${teamB.color}`} />
-          <h2 className="text-3xl font-bold text-slate-700 mb-6 uppercase tracking-tight">{teamB.name}</h2>
-          <div className="text-[180px] font-black text-slate-900 leading-none tracking-tighter tabular-nums group-active:scale-95 transition-transform">
+          <div className={`absolute top-0 left-0 right-0 h-2 ${teamB.color} shadow-[0_0_20px_rgba(0,0,0,0.5)]`} />
+          <h2 className="text-2xl md:text-4xl font-black text-white mb-8 uppercase tracking-wide opacity-50 group-hover:opacity-100 transition-opacity">{teamB.name}</h2>
+          <div className="text-[120px] md:text-[220px] font-black text-white leading-none tracking-tighter tabular-nums drop-shadow-2xl group-active:scale-95 transition-transform group-active:text-red-400">
             {scores.b}
           </div>
-          <div className="mt-8 flex items-center gap-2 text-slate-400 font-bold uppercase tracking-widest">
-            Sets Won <span className="bg-slate-800 text-white px-3 py-1 rounded-full text-lg">{match.setsB}</span>
+          <div className="mt-12 flex flex-col items-center gap-2">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-[0.2em]">Total Sets</span>
+            <span className="bg-slate-800 border border-white/10 text-white px-6 py-2 rounded-xl text-3xl font-black">{match.setsB}</span>
           </div>
         </div>
       </div>
 
       {/* Footer Actions */}
-      <div className="bg-white border-t border-slate-200 p-6 flex justify-center gap-4">
-        <button onClick={() => alert("Undo requires history implementation")} className="flex items-center gap-2 px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold transition-colors">
+      <div className="relative z-10 bg-slate-900/80 backdrop-blur-md border-t border-white/10 p-6 flex justify-center gap-4">
+        <button onClick={() => alert("Undo requires history implementation")} className="flex items-center gap-2 px-8 py-4 bg-white/5 hover:bg-white/10 text-slate-300 rounded-xl font-bold transition-all border border-white/5 uppercase tracking-wider text-sm">
           <ArrowLeft size={18} /> Undo Last Point
         </button>
       </div>
@@ -347,175 +373,294 @@ const AdminDashboard = ({
     alert("Rules updated!");
   };
 
-  return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-slate-800">Admin Dashboard</h1>
-        <button onClick={() => { setIsAdmin(false); setView('public'); }} className="text-red-500 font-bold hover:underline">Log Out</button>
-      </div>
+  const generateFixtures = () => {
+    if (config.tournamentType === 'round-robin') {
+      const generated = [];
+      const teamIds = teams.map(t => t.id);
+      for (let i = 0; i < teamIds.length; i++) {
+        for (let j = i + 1; j < teamIds.length; j++) {
+          // Basic Round Robin: Each plays each once
+          generated.push({
+            teamA: teamIds[i],
+            teamB: teamIds[j],
+            date: new Date().toISOString().split('T')[0],
+            time: '18:00'
+          });
+        }
+      }
+      generated.forEach(g => createFixture(g));
+      alert(`Generated ${generated.length} matches!`);
+    } else {
+      alert("Only Round Robin generation is currently supported.");
+    }
+  };
 
-      <div className="grid md:grid-cols-[250px_1fr] gap-8">
-        <div className="flex flex-col gap-2">
-          {[
-            { id: 'fixtures', icon: Calendar, label: 'Match Schedule' },
-            { id: 'teams', icon: Users, label: 'Manage Teams' },
-            { id: 'players', icon: Users, label: 'Manage Players' },
-            { id: 'settings', icon: Settings, label: 'Rules & Config' },
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setAdminTab(tab.id)}
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg font-bold transition-colors text-left ${adminTab === tab.id ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
-            >
-              <tab.icon size={18} /> {tab.label}
-            </button>
-          ))}
+  return (
+    <div className="min-h-screen bg-slate-950 font-sans text-slate-100 pb-20 relative overflow-hidden">
+      {/* Dynamic Background for Admin */}
+      <div className="absolute top-0 left-0 w-full h-[600px] bg-gradient-to-b from-slate-900 via-slate-950 to-slate-950 pointer-events-none" />
+      <div className="absolute top-[100px] right-[100px] w-[500px] h-[500px] bg-blue-900/10 rounded-full blur-[100px] pointer-events-none" />
+
+      <div className="relative z-10 max-w-6xl mx-auto px-4 py-8">
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-black uppercase tracking-wide text-white">Dashboard</h1>
+          <button onClick={() => { setIsAdmin(false); setView('public'); }} className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-bold rounded-lg transition-colors border border-red-500/20">Log Out</button>
         </div>
 
-        <div className="space-y-6">
-          {/* FIXTURES TAB */}
-          {adminTab === 'fixtures' && (
-            <>
-              <Card className="p-6 bg-slate-50">
-                <h3 className="font-bold text-lg mb-4 text-slate-700">Schedule New Match</h3>
-                <form onSubmit={(e) => {
-                  e.preventDefault();
-                  if (fixture.ta && fixture.tb && fixture.ta !== fixture.tb) {
-                    createFixture({ teamA: fixture.ta, teamB: fixture.tb, date: fixture.d, time: fixture.t });
-                    setFixture({ ta: '', tb: '', d: '', t: '' });
-                  }
-                }} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <select className="p-3 rounded border" value={fixture.ta} onChange={e => setFixture({ ...fixture, ta: e.target.value })}>
-                      <option value="">Select Team A</option>
-                      {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                    </select>
-                    <select className="p-3 rounded border" value={fixture.tb} onChange={e => setFixture({ ...fixture, tb: e.target.value })}>
-                      <option value="">Select Team B</option>
-                      {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                    </select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <input type="date" className="p-3 rounded border" value={fixture.d} onChange={e => setFixture({ ...fixture, d: e.target.value })} required />
-                    <input type="time" className="p-3 rounded border" value={fixture.t} onChange={e => setFixture({ ...fixture, t: e.target.value })} required />
-                  </div>
-                  <button className="w-full py-3 bg-blue-600 text-white font-bold rounded hover:bg-blue-700">Add to Schedule</button>
-                </form>
-              </Card>
+        <div className="grid md:grid-cols-[260px_1fr] gap-8">
+          <div className="flex flex-col gap-3">
+            {[
+              { id: 'fixtures', icon: Calendar, label: 'Match Schedule' },
+              { id: 'teams', icon: Users, label: 'Manage Teams' },
+              { id: 'players', icon: Users, label: 'Manage Players' },
+              { id: 'settings', icon: Settings, label: 'Configuration' },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setAdminTab(tab.id)}
+                className={`flex items-center gap-3 px-5 py-4 rounded-xl font-bold transition-all text-left ${adminTab === tab.id
+                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg'
+                  : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10'}`}
+              >
+                <tab.icon size={20} /> <span className="uppercase tracking-wider text-xs">{tab.label}</span>
+              </button>
+            ))}
+          </div>
 
-              <div className="space-y-3">
-                {matches.sort((a, b) => new Date(a.startTime) - new Date(b.startTime)).map(m => (
-                  <Card key={m.id} className="p-4 flex justify-between items-center">
-                    <div>
-                      <div className="font-bold text-slate-800">{getTeam(teams, m.teamA).name} vs {getTeam(teams, m.teamB).name}</div>
-                      <div className="text-xs text-slate-500">{new Date(m.startTime).toLocaleString()}</div>
+          <div className="space-y-6">
+            {/* FIXTURES TAB */}
+            {adminTab === 'fixtures' && (
+              <>
+                <AdminGlassCard className="p-6">
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="font-bold text-lg text-white">Schedule New Match</h3>
+                    <button onClick={generateFixtures} className="text-xs bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded font-bold uppercase tracking-wider">Auto-Generate Fixtures</button>
+                  </div>
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    if (fixture.ta && fixture.tb && fixture.ta !== fixture.tb) {
+                      createFixture({ teamA: fixture.ta, teamB: fixture.tb, date: fixture.d, time: fixture.t });
+                      setFixture({ ta: '', tb: '', d: '', t: '' });
+                    }
+                  }} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <select className="p-3 rounded bg-slate-800 border border-slate-700 text-white focus:border-blue-500 outline-none" value={fixture.ta} onChange={e => setFixture({ ...fixture, ta: e.target.value })}>
+                        <option value="">Select Team A</option>
+                        {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                      </select>
+                      <select className="p-3 rounded bg-slate-800 border border-slate-700 text-white focus:border-blue-500 outline-none" value={fixture.tb} onChange={e => setFixture({ ...fixture, tb: e.target.value })}>
+                        <option value="">Select Team B</option>
+                        {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                      </select>
                     </div>
-                    <div className="flex gap-2">
-                      {m.status !== 'finished' && (
-                        <button onClick={() => startMatch(m.id)} className="px-4 py-2 bg-green-600 text-white rounded font-bold text-sm hover:bg-green-700">
-                          {m.status === 'live' ? 'Resume' : 'Start'}
-                        </button>
-                      )}
-                      <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', m.id))} className="p-2 text-red-400 hover:bg-red-50 rounded">
-                        <Trash2 size={16} />
-                      </button>
+                    <div className="grid grid-cols-2 gap-4">
+                      <input type="date" className="p-3 rounded bg-slate-800 border border-slate-700 text-white focus:border-blue-500 outline-none" value={fixture.d} onChange={e => setFixture({ ...fixture, d: e.target.value })} required />
+                      <input type="time" className="p-3 rounded bg-slate-800 border border-slate-700 text-white focus:border-blue-500 outline-none" value={fixture.t} onChange={e => setFixture({ ...fixture, t: e.target.value })} required />
                     </div>
-                  </Card>
-                ))}
-              </div>
-            </>
-          )}
+                    <button className="w-full py-3 bg-blue-600 text-white font-bold rounded hover:bg-blue-500 transition-colors uppercase tracking-wider text-sm shadow-lg">Add to Schedule</button>
+                  </form>
+                </AdminGlassCard>
 
-          {/* TEAMS TAB */}
-          {adminTab === 'teams' && (
-            <>
-              <Card className="p-6">
-                <form onSubmit={(e) => {
-                  e.preventDefault();
-                  if (newItem) {
-                    const colors = ['bg-red-500', 'bg-blue-500', 'bg-emerald-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500', 'bg-indigo-500', 'bg-cyan-500'];
-                    addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'teams'), { name: newItem, color: colors[Math.floor(Math.random() * colors.length)] });
-                    setNewItem('');
-                  }
-                }} className="flex gap-3">
-                  <input className="flex-1 p-3 border rounded" placeholder="Team Name" value={newItem} onChange={e => setNewItem(e.target.value)} />
-                  <button className="px-6 bg-blue-600 text-white font-bold rounded">Add</button>
-                </form>
-              </Card>
-              <div className="grid gap-3">
-                {teams.map(t => (
-                  <Card key={t.id} className="p-4 flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded ${t.color}`} />
+                <div className="space-y-3">
+                  {matches.sort((a, b) => new Date(a.startTime) - new Date(b.startTime)).map(m => (
+                    <AdminGlassCard key={m.id} className="p-4 flex justify-between items-center group hover:bg-slate-800/80 transition-colors">
                       <div>
-                        <span className="font-bold block">{t.name}</span>
-                        <span className="text-xs text-slate-500">Squad: {players.filter(p => p.teamId === t.id).length} Players</span>
+                        <div className="font-bold text-white text-lg">{getTeam(teams, m.teamA).name} vs {getTeam(teams, m.teamB).name}</div>
+                        <div className="text-xs text-slate-400 font-mono mt-1">{new Date(m.startTime).toLocaleString()}</div>
                       </div>
+                      <div className="flex gap-2">
+                        {/* Only show Start/Resume if not finished */}
+                        {m.status !== 'finished' && (
+                          <button onClick={() => startMatch(m.id)} className="px-4 py-2 bg-green-500 hover:bg-green-400 text-white rounded font-bold text-xs uppercase tracking-wider shadow-lg shadow-green-500/20">
+                            {m.status === 'live' ? 'Resume' : 'Start Match'}
+                          </button>
+                        )}
+                        <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', m.id))} className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </AdminGlassCard>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* TEAMS TAB */}
+            {adminTab === 'teams' && (
+              <>
+                <AdminGlassCard className="p-6">
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    if (newItem) {
+                      const colors = ['bg-red-500', 'bg-blue-500', 'bg-emerald-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500', 'bg-indigo-500', 'bg-cyan-500'];
+                      addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'teams'), { name: newItem, color: colors[Math.floor(Math.random() * colors.length)] });
+                      setNewItem('');
+                    }
+                  }} className="flex gap-3">
+                    <input className="flex-1 p-3 bg-slate-800 border border-slate-700 rounded text-white focus:border-blue-500 outline-none" placeholder="Enter Team Name" value={newItem} onChange={e => setNewItem(e.target.value)} />
+                    <button className="px-6 bg-blue-600 text-white font-bold rounded hover:bg-blue-500 uppercase tracking-wider text-sm">Add Team</button>
+                  </form>
+                </AdminGlassCard>
+                <div className="grid gap-3">
+                  {teams.map(t => (
+                    <AdminGlassCard key={t.id} className="p-4 flex justify-between items-center group">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-lg ${t.color} shadow-lg`} />
+                        <div>
+                          <span className="font-bold text-white text-lg block">{t.name}</span>
+                          <span className="text-xs text-slate-400 uppercase tracking-wider">Squad Size: {players.filter(p => p.teamId === t.id).length}</span>
+                        </div>
+                      </div>
+                      <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teams', t.id))} className="text-slate-600 hover:text-red-400 transition-colors"><Trash2 size={18} /></button>
+                    </AdminGlassCard>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* PLAYERS TAB */}
+            {adminTab === 'players' && (
+              <>
+                {/* Add Player Form */}
+                <AdminGlassCard className="p-6">
+                  <h3 className="font-bold text-lg mb-4 text-white">Add New Player</h3>
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    if (newPlayer.name) {
+                      addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'players'), newPlayer);
+                      setNewPlayer({ name: '', teamId: '', isCaptain: false });
+                    }
+                  }} className="space-y-4">
+                    <input
+                      type="text"
+                      className="w-full p-3 rounded bg-slate-800 border border-slate-700 text-white focus:border-blue-500 outline-none"
+                      placeholder="Player Name"
+                      value={newPlayer.name}
+                      onChange={e => setNewPlayer({ ...newPlayer, name: e.target.value })}
+                    />
+                    <select
+                      className="w-full p-3 rounded bg-slate-800 border border-slate-700 text-white focus:border-blue-500 outline-none"
+                      value={newPlayer.teamId}
+                      onChange={e => setNewPlayer({ ...newPlayer, teamId: e.target.value })}
+                    >
+                      <option value="">Select Team (Optional)</option>
+                      {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                    <label className="flex items-center gap-2 text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newPlayer.isCaptain}
+                        onChange={e => setNewPlayer({ ...newPlayer, isCaptain: e.target.checked })}
+                        className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm font-bold">Set as Team Captain</span>
+                    </label>
+                    <button type="submit" className="w-full py-3 bg-blue-600 text-white font-bold rounded hover:bg-blue-500 uppercase tracking-wider text-sm shadow-lg">Add Player</button>
+                  </form>
+                </AdminGlassCard>
+
+                {/* Player List */}
+                <div className="space-y-4">
+                  {teams.map(team => {
+                    const teamPlayers = players.filter(p => p.teamId === team.id);
+                    if (teamPlayers.length === 0) return null;
+                    return (
+                      <AdminGlassCard key={team.id} className="p-4">
+                        <h4 className={`font-bold text-lg mb-3 ${team.color.replace('bg-', 'text-')}`}>{team.name}</h4>
+                        <div className="space-y-2">
+                          {teamPlayers.map(p => (
+                            <div key={p.id} className="flex justify-between items-center bg-slate-800/50 p-3 rounded border border-white/5">
+                              <div className="flex items-center gap-2">
+                                {p.isCaptain && <span className="bg-yellow-500 text-black text-[10px] font-black px-1.5 py-0.5 rounded">C</span>}
+                                <span className={`text-slate-200 ${p.isCaptain ? 'font-bold' : ''}`}>{p.name}</span>
+                              </div>
+                              <div className="flex gap-3">
+                                <button onClick={() => updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', p.id), { isCaptain: !p.isCaptain })} className="text-xs text-blue-400 font-bold hover:underline hover:text-blue-300">
+                                  {p.isCaptain ? 'Demote' : 'Promote'}
+                                </button>
+                                <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', p.id))} className="text-slate-600 hover:text-red-400">
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </AdminGlassCard>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {/* SETTINGS TAB */}
+            {adminTab === 'settings' && (
+              <AdminGlassCard className="p-8">
+                <h3 className="text-xl font-bold mb-6 text-white border-b border-white/10 pb-4">Tournament Configuration</h3>
+                <form onSubmit={handleSaveRules} className="space-y-6">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Tournament Name</label>
+                    <input
+                      type="text"
+                      className="w-full p-3 bg-slate-800 border border-slate-700 rounded text-white focus:border-blue-500 outline-none"
+                      value={localConfig.tournamentName}
+                      onChange={e => setLocalConfig({ ...localConfig, tournamentName: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Tournament Type</label>
+                    <select
+                      className="w-full p-3 bg-slate-800 border border-slate-700 rounded text-white focus:border-blue-500 outline-none"
+                      value={localConfig.tournamentType || 'round-robin'}
+                      onChange={e => setLocalConfig({ ...localConfig, tournamentType: e.target.value })}
+                    >
+                      <option value="round-robin">Round Robin (League)</option>
+                      <option value="knockout">Knockout</option>
+                      <option value="group">Group Stage</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Points per Set</label>
+                      <input
+                        type="number"
+                        className="w-full p-3 bg-slate-800 border border-slate-700 rounded text-white focus:border-blue-500 outline-none"
+                        value={localConfig.pointsPerSet === '' ? '' : localConfig.pointsPerSet}
+                        onChange={e => setLocalConfig({ ...localConfig, pointsPerSet: e.target.value === '' ? '' : parseInt(e.target.value) })}
+                      />
                     </div>
-                    <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teams', t.id))} className="text-red-400"><Trash2 size={18} /></button>
-                  </Card>
-                ))}
-              </div>
-            </>
-          )}
-
-          {/* SETTINGS TAB */}
-          {adminTab === 'settings' && (
-            <Card className="p-8">
-              <h3 className="text-xl font-bold mb-6 border-b pb-4">Tournament Configuration</h3>
-              <form onSubmit={handleSaveRules} className="space-y-6">
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Tournament Name</label>
-                  <input
-                    type="text"
-                    className="w-full p-3 border border-slate-300 rounded-lg"
-                    value={localConfig.tournamentName}
-                    onChange={e => setLocalConfig({ ...localConfig, tournamentName: e.target.value })}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Points per Set</label>
-                    <input
-                      type="number"
-                      className="w-full p-3 border border-slate-300 rounded-lg"
-                      value={localConfig.pointsPerSet === '' ? '' : localConfig.pointsPerSet}
-                      onChange={e => setLocalConfig({ ...localConfig, pointsPerSet: e.target.value === '' ? '' : parseInt(e.target.value) })}
-                    />
-                    <p className="text-xs text-slate-500 mt-1">Standard set target (e.g. 25)</p>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Tie-Breaker Points</label>
+                      <input
+                        type="number"
+                        className="w-full p-3 bg-slate-800 border border-slate-700 rounded text-white focus:border-blue-500 outline-none"
+                        value={localConfig.tieBreakerPoints === '' ? '' : localConfig.tieBreakerPoints}
+                        onChange={e => setLocalConfig({ ...localConfig, tieBreakerPoints: e.target.value === '' ? '' : parseInt(e.target.value) })}
+                      />
+                    </div>
                   </div>
+
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Tie-Breaker Points</label>
-                    <input
-                      type="number"
-                      className="w-full p-3 border border-slate-300 rounded-lg"
-                      value={localConfig.tieBreakerPoints === '' ? '' : localConfig.tieBreakerPoints}
-                      onChange={e => setLocalConfig({ ...localConfig, tieBreakerPoints: e.target.value === '' ? '' : parseInt(e.target.value) })}
-                    />
-                    <p className="text-xs text-slate-500 mt-1">Deciding set target (e.g. 15)</p>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Sets per Match</label>
+                    <select
+                      className="w-full p-3 bg-slate-800 border border-slate-700 rounded text-white focus:border-blue-500 outline-none"
+                      value={localConfig.setsPerMatch}
+                      onChange={e => setLocalConfig({ ...localConfig, setsPerMatch: parseInt(e.target.value) })}
+                    >
+                      <option value={1}>1 Set</option>
+                      <option value={3}>3 Sets</option>
+                      <option value={5}>5 Sets</option>
+                    </select>
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Sets per Match (Best Of)</label>
-                  <select
-                    className="w-full p-3 border border-slate-300 rounded-lg"
-                    value={localConfig.setsPerMatch}
-                    onChange={e => setLocalConfig({ ...localConfig, setsPerMatch: parseInt(e.target.value) })}
-                  >
-                    <option value={1}>1 Set</option>
-                    <option value={3}>3 Sets</option>
-                    <option value={5}>5 Sets</option>
-                  </select>
-                </div>
-
-                <button className="w-full py-4 bg-slate-900 text-white font-bold rounded-lg hover:bg-slate-800 transition-colors flex justify-center items-center gap-2">
-                  <Save size={18} /> Save Configuration
-                </button>
-              </form>
-            </Card>
-          )}
+                  <button className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-lg hover:from-blue-500 hover:to-indigo-500 transition-all flex justify-center items-center gap-2 shadow-lg uppercase tracking-wider text-sm">
+                    <Save size={18} /> Save Configuration
+                  </button>
+                </form>
+              </AdminGlassCard>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -723,15 +868,17 @@ export default function App() {
 
           {/* Live Section */}
           {liveMatches.length > 0 && (
-            <section className="mb-12 animate-fade-in">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 bg-red-500 rounded-lg animate-pulse">
-                  <Activity size={20} className="text-white" />
+            <section className="mb-12 animate-fade-in text-center">
+              <div className="inline-flex items-center gap-3 mb-8 px-6 py-2 bg-red-500/10 rounded-full border border-red-500/20">
+                <div className="p-1.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.5)]">
+                  <Activity size={16} className="text-white" />
                 </div>
-                <h2 className="text-2xl font-black uppercase tracking-widest text-white">Live Action</h2>
+                <h2 className="text-lg font-black uppercase tracking-[0.2em] text-red-400">Live Commentary</h2>
               </div>
-              <div className="grid lg:grid-cols-2 gap-6">
-                {liveMatches.map(m => <MatchCardPublic key={m.id} match={m} teams={teams} players={players} config={config} />)}
+              <div className="flex justify-center">
+                <div className="w-full max-w-4xl">
+                  {liveMatches.map(m => <MatchCardPublic key={m.id} match={m} teams={teams} players={players} config={config} isLiveFeature={true} />)}
+                </div>
               </div>
             </section>
           )}
