@@ -293,31 +293,32 @@ const AdminScorer = ({ match, teams, config, handleScore, setView, updateDoc, db
   const leftScore = swapSides ? (match.scores[match.scores.length - 1]?.b || 0) : (match.scores[match.scores.length - 1]?.a || 0);
   const rightScore = swapSides ? (match.scores[match.scores.length - 1]?.a || 0) : (match.scores[match.scores.length - 1]?.b || 0);
 
-  const currentScores = match.scores.length > 0 ? match.scores : [{ a: 0, b: 0 }];
+  const currentScores = match.scores?.length > 0 ? match.scores : [{ a: 0, b: 0 }];
   const setIdx = currentScores.length;
   // const scores = currentScores[setIdx - 1]; // Removed to use dynamic left/right
 
   const stageRules = (config.matchRules && config.matchRules[match.stage]) || config.matchRules?.league || { sets: 3, points: 25, tieBreak: 15 };
   const isDecider = setIdx === stageRules.sets;
   const base = isDecider ? stageRules.tieBreak : stageRules.points;
-  const maxScore = Math.max(currentScores[setIdx - 1].a, currentScores[setIdx - 1].b);
+  const maxScore = Math.max(currentScores[setIdx - 1]?.a || 0, currentScores[setIdx - 1]?.b || 0);
   const target = Math.max(base, (maxScore >= base - 1 ? maxScore + 2 : base));
 
   // Swap Alert Logic
   useEffect(() => {
+    if (!match || !config) return; // Guard
     // Determine rules for this match
-    const stageRules = (config.matchRules && config.matchRules[match.stage]) || config.matchRules?.league || { sets: 3, points: 25, tieBreak: 15 };
+    const stageRules = (config?.matchRules && config.matchRules[match.stage]) || config?.matchRules?.league || { sets: 3, points: 25, tieBreak: 15 };
     const isDecidingSet = setIdx === stageRules.sets;
     const base = isDecidingSet ? stageRules.tieBreak : stageRules.points;
 
     if (isDecidingSet) {
       const switchPoint = Math.ceil(base / 2); // 8 for 15, 13 for 25
       const current = currentScores[setIdx - 1];
-      if ((current.a === switchPoint && current.b < switchPoint) || (current.b === switchPoint && current.a < switchPoint)) {
+      if (current && ((current.a === switchPoint && current.b < switchPoint) || (current.b === switchPoint && current.a < switchPoint))) {
         alert("SWAP SIDES NOW! (Reached Switch Point)");
       }
     }
-  }, [currentScores, setIdx, config, match.stage]);
+  }, [currentScores, setIdx, config, match?.stage]);
 
   return (
     <div className="min-h-screen bg-slate-950 font-sans text-slate-100 flex flex-col relative overflow-hidden">
@@ -404,9 +405,10 @@ const AdminDashboard = ({
       ...DEFAULT_CONFIG,
       ...config,
       matchRules: {
+        ...DEFAULT_CONFIG.matchRules,
+        ...(config.matchRules || {}),
         league: { ...DEFAULT_CONFIG.matchRules.league, ...(config.matchRules?.league || {}) },
-        playoff: { ...DEFAULT_CONFIG.matchRules.playoff, ...(config.matchRules?.playoff || {}) },
-        ...config.matchRules
+        playoff: { ...DEFAULT_CONFIG.matchRules.playoff, ...(config.matchRules?.playoff || {}) }
       }
     });
   }, [config]);
@@ -549,22 +551,36 @@ const AdminDashboard = ({
               <>
                 <AdminGlassCard className="p-6">
                   <div className="flex justify-between items-center mb-6">
-                    <h3 className="font-bold text-lg text-white">Schedule New Match</h3>
+                    <h3 className="font-bold text-lg text-white">{fixture.id ? 'Edit Match' : 'Schedule New Match'}</h3>
                     <div className="flex gap-2">
-                      {config.tournamentType === 'group' && (
+                      {!fixture.id && config.tournamentType === 'group' && (
                         <select className="bg-slate-800 text-white text-xs p-2 rounded" value={numGroups} onChange={e => setNumGroups(parseInt(e.target.value))}>
                           <option value={2}>2 Groups</option>
                           <option value={3}>3 Groups</option>
                           <option value={4}>4 Groups</option>
                         </select>
                       )}
-                      <button onClick={generateFixtures} className="text-xs bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded font-bold uppercase tracking-wider">Auto-Generate Fixtures</button>
+                      {!fixture.id && <button onClick={generateFixtures} className="text-xs bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded font-bold uppercase tracking-wider">Auto-Generate Fixtures</button>}
+                      {fixture.id && <button onClick={() => setFixture({ ta: '', tb: '', d: '', t: '', stage: 'league' })} className="text-xs bg-slate-600 hover:bg-slate-500 text-white px-3 py-2 rounded font-bold uppercase tracking-wider">Cancel Edit</button>}
                     </div>
                   </div>
                   <form onSubmit={(e) => {
                     e.preventDefault();
                     if (fixture.ta && fixture.tb && fixture.ta !== fixture.tb) {
-                      createFixture({ teamA: fixture.ta, teamB: fixture.tb, date: fixture.d, time: fixture.t, stage: fixture.stage });
+                      if (fixture.id) {
+                        // Update existing match
+                        updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', fixture.id), {
+                          teamA: fixture.ta,
+                          teamB: fixture.tb,
+                          startTime: `${fixture.d}T${fixture.t}`,
+                          stage: fixture.stage,
+                          matchName: fixture.matchName || ''
+                        });
+                        alert("Match Updated!");
+                      } else {
+                        // Create new
+                        createFixture({ teamA: fixture.ta, teamB: fixture.tb, date: fixture.d, time: fixture.t, stage: fixture.stage, matchName: fixture.matchName });
+                      }
                       setFixture({ ta: '', tb: '', d: '', t: '', stage: 'league' });
                     }
                   }} className="space-y-4">
@@ -589,7 +605,9 @@ const AdminDashboard = ({
                       <input type="date" className="p-3 rounded bg-slate-800 border border-slate-700 text-white focus:border-blue-500 outline-none" value={fixture.d} onChange={e => setFixture({ ...fixture, d: e.target.value })} required />
                       <input type="time" className="p-3 rounded bg-slate-800 border border-slate-700 text-white focus:border-blue-500 outline-none" value={fixture.t} onChange={e => setFixture({ ...fixture, t: e.target.value })} required />
                     </div>
-                    <button className="w-full py-3 bg-blue-600 text-white font-bold rounded hover:bg-blue-500 transition-colors uppercase tracking-wider text-sm shadow-lg">Add to Schedule</button>
+                    <button className={`w-full py-3 ${fixture.id ? 'bg-orange-600 hover:bg-orange-500' : 'bg-blue-600 hover:bg-blue-500'} text-white font-bold rounded transition-colors uppercase tracking-wider text-sm shadow-lg`}>
+                      {fixture.id ? 'Update Match' : 'Add to Schedule'}
+                    </button>
                   </form>
                 </AdminGlassCard>
 
@@ -605,6 +623,25 @@ const AdminDashboard = ({
                         </div>
                       </div>
                       <div className="flex gap-2">
+                        {/* Edit Button */}
+                        {m.status === 'scheduled' && (
+                          <button onClick={() => {
+                            const d = new Date(m.startTime);
+                            setFixture({
+                              id: m.id,
+                              ta: m.teamA,
+                              tb: m.teamB,
+                              d: d.toISOString().split('T')[0],
+                              t: d.toTimeString().slice(0, 5),
+                              stage: m.stage || 'league',
+                              matchName: m.matchName || ''
+                            });
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded font-bold text-xs uppercase tracking-wider">
+                            Edit
+                          </button>
+                        )}
+
                         {/* Only show Start/Resume if not finished */}
                         {m.status !== 'finished' && (
                           <button onClick={() => m.status === 'live' ? startMatch(m.id) : handleStartMatchClick(m)} className="px-4 py-2 bg-green-500 hover:bg-green-400 text-white rounded font-bold text-xs uppercase tracking-wider shadow-lg shadow-green-500/20">
@@ -1057,6 +1094,7 @@ export default function App() {
 
   // --- Sub-Components ---
   const PublicView = () => {
+    const [expandedTeamId, setExpandedTeamId] = useState(null);
     const liveMatches = matches.filter(m => m.status === 'live');
     const upcomingMatches = matches.filter(m => m.status === 'scheduled').sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
     const finishedMatches = matches.filter(m => m.status === 'finished').sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
@@ -1071,11 +1109,28 @@ export default function App() {
         <div className="absolute -top-[200px] -right-[200px] w-[600px] h-[600px] bg-purple-600/20 rounded-full blur-[100px] pointer-events-none" />
         <div className="absolute top-[200px] -left-[200px] w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[100px] pointer-events-none" />
 
+        <style>{`
+          @media print {
+            body { background: white; color: black; }
+            nav, button, .no-print { display: none !important; }
+            .bg-slate-950 { background: white !important; }
+            .text-white { color: black !important; }
+            .text-slate-400 { color: #555 !important; }
+            .bg-white\\/5 { background: #f0f0f0 !important; border: 1px solid #ccc !important; }
+            .bg-white\\/10 { background: #e0e0e0 !important; }
+            .absolute { display: none; }
+            .min-h-screen { min-height: auto; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #ddd; padding: 8px; }
+            .shadow-lg, .shadow-xl { shadow: none !important; }
+          }
+        `}</style>
+
         <div className="relative z-10 max-w-6xl mx-auto px-4 py-8">
 
           {/* Live Section */}
           {liveMatches.length > 0 && (
-            <section className="mb-12 animate-fade-in text-center">
+            <section className="mb-12 animate-fade-in text-center no-print">
               <div className="inline-flex items-center gap-3 mb-8 px-6 py-2 bg-red-500/10 rounded-full border border-red-500/20">
                 <div className="p-1.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.5)]">
                   <Activity size={16} className="text-white" />
@@ -1091,7 +1146,7 @@ export default function App() {
           )}
 
           {/* Tab Navigation */}
-          <div className="flex justify-center mb-8">
+          <div className="flex justify-center mb-8 no-print">
             <div className="bg-white/5 backdrop-blur-md p-1 rounded-2xl flex gap-1 border border-white/10">
               {[
                 { id: 'standings', label: 'Standings', icon: TrendingUp },
@@ -1110,6 +1165,13 @@ export default function App() {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Print Button */}
+          <div className="flex justify-end mb-4 no-print">
+            <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold uppercase tracking-wider text-xs border border-white/10 transition-colors">
+              <span className="text-lg">🖨️</span> Print Report
+            </button>
           </div>
 
           {/* Content */}
@@ -1144,37 +1206,85 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {standings.length === 0 && <tr><td colSpan="7" className="p-8 text-center text-slate-500 italic">No teams registered</td></tr>}
+                    {standings.length === 0 && <tr><td colSpan="8" className="p-8 text-center text-slate-500 italic">No teams registered</td></tr>}
                     {standings.map((team, idx) => (
-                      <tr key={team.id} className="hover:bg-white/5 transition-colors group">
-                        <td className="p-5 font-mono text-slate-500 font-bold w-16">{idx + 1}</td>
-                        <td className="p-5">
-                          <div className="flex items-center gap-4">
-                            <div className={`w-10 h-10 rounded-lg ${team.color} flex items-center justify-center font-black text-white shadow-lg`}>
-                              {team.name[0]}
+                      <React.Fragment key={team.id}>
+                        <tr onClick={() => setExpandedTeamId(expandedTeamId === team.id ? null : team.id)} className="hover:bg-white/5 transition-colors group cursor-pointer">
+                          <td className="p-5 font-mono text-slate-500 font-bold w-16">{idx + 1}</td>
+                          <td className="p-5">
+                            <div className="flex items-center gap-4">
+                              <div className={`w-10 h-10 rounded-lg ${team.color} flex items-center justify-center font-black text-white shadow-lg`}>
+                                {team.name[0]}
+                              </div>
+                              <span className="font-bold text-lg text-white group-hover:text-blue-300 transition-colors">{team.name}</span>
                             </div>
-                            <span className="font-bold text-lg text-white group-hover:text-blue-300 transition-colors">{team.name}</span>
-                          </div>
-                        </td>
-                        <td className="p-5 text-center font-mono text-slate-300">{team.played}</td>
-                        <td className="p-5 text-center font-mono">
-                          <span className="text-green-400 font-bold">{team.won}</span>
-                          <span className="text-slate-600 mx-1">/</span>
-                          <span className="text-red-400 font-bold">{team.lost}</span>
-                        </td>
-                        <td className="p-5 text-center font-mono text-sm hidden sm:table-cell text-slate-400">
-                          {team.setRatio.toFixed(3)}
-                        </td>
-                        <td className="p-5 text-center font-mono text-sm hidden sm:table-cell text-slate-400">
-                          {team.pointRatio.toFixed(3)}
-                        </td>
-                        <td className="p-5 text-center font-mono text-sm hidden sm:table-cell text-slate-400">
-                          {team.squadSize}
-                        </td>
-                        <td className="p-5 text-center bg-white/5">
-                          <span className="text-2xl font-black text-blue-400">{team.leaguePoints}</span>
-                        </td>
-                      </tr>
+                          </td>
+                          <td className="p-5 text-center font-mono text-slate-300">{team.played}</td>
+                          <td className="p-5 text-center font-mono">
+                            <span className="text-green-400 font-bold">{team.won}</span>
+                            <span className="text-slate-600 mx-1">/</span>
+                            <span className="text-red-400 font-bold">{team.lost}</span>
+                          </td>
+                          <td className="p-5 text-center font-mono text-sm hidden sm:table-cell text-slate-400">
+                            {team.setRatio.toFixed(3)}
+                          </td>
+                          <td className="p-5 text-center font-mono text-sm hidden sm:table-cell text-slate-400">
+                            {team.pointRatio.toFixed(3)}
+                          </td>
+                          <td className="p-5 text-center font-mono text-sm hidden sm:table-cell text-slate-400">
+                            {team.squadSize}
+                          </td>
+                          <td className="p-5 text-center bg-white/5">
+                            <span className="text-2xl font-black text-blue-400">{team.leaguePoints}</span>
+                          </td>
+                        </tr>
+                        {/* Expanded Details */}
+                        {expandedTeamId === team.id && (
+                          <tr className="bg-slate-900/50 animate-fade-in text-sm">
+                            <td colSpan="8" className="p-6 border-b border-white/5">
+                              <div className="grid md:grid-cols-2 gap-8">
+                                <div>
+                                  <h4 className="text-slate-400 font-bold uppercase tracking-wider mb-3 text-xs">Recent Results</h4>
+                                  <div className="space-y-2">
+                                    {matches.filter(m => (m.teamA === team.id || m.teamB === team.id) && m.status === 'finished').length === 0 && <p className="text-slate-600 italic">No finished matches.</p>}
+                                    {matches.filter(m => (m.teamA === team.id || m.teamB === team.id) && m.status === 'finished').map(m => {
+                                      const isA = m.teamA === team.id;
+                                      const opp = isA ? m.teamB : m.teamA;
+                                      const win = m.winner === team.id;
+                                      return (
+                                        <div key={m.id} className="flex justify-between items-center p-2 bg-slate-950 rounded border border-white/5">
+                                          <span className="text-slate-300">vs <strong className="text-white">{getTeam(teams, opp).name}</strong></span>
+                                          <span className={`font-mono font-bold ${win ? 'text-green-400' : 'text-red-400'}`}>
+                                            {isA ? m.setsA : m.setsB}-{isA ? m.setsB : m.setsA}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                                <div>
+                                  <h4 className="text-slate-400 font-bold uppercase tracking-wider mb-3 text-xs">Upcoming Schedule</h4>
+                                  <div className="space-y-2">
+                                    {matches.filter(m => (m.teamA === team.id || m.teamB === team.id) && m.status === 'scheduled').length === 0 && <p className="text-slate-600 italic">No upcoming matches.</p>}
+                                    {matches.filter(m => (m.teamA === team.id || m.teamB === team.id) && m.status === 'scheduled').map(m => {
+                                      const isA = m.teamA === team.id;
+                                      const opp = isA ? m.teamB : m.teamA;
+                                      return (
+                                        <div key={m.id} className="flex justify-between items-center p-2 bg-slate-950 rounded border border-white/5">
+                                          <span className="text-slate-300">vs <strong className="text-white">{getTeam(teams, opp).name}</strong></span>
+                                          <span className="text-xs text-blue-400 font-bold">
+                                            {new Date(m.startTime).toLocaleDateString()} {new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
