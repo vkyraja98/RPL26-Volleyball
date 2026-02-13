@@ -791,15 +791,15 @@ const AdminDashboard = ({
                     <div className="grid grid-cols-3 gap-4">
                       <div>
                         <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Sets</label>
-                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules.playoff?.sets || 5} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, playoff: { ...(localConfig.matchRules.playoff || {}), sets: parseInt(e.target.value) } } })} />
+                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules?.playoff?.sets || 5} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, playoff: { ...(localConfig.matchRules?.playoff || {}), sets: parseInt(e.target.value) } } })} />
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Points</label>
-                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules.playoff?.points || 25} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, playoff: { ...(localConfig.matchRules.playoff || {}), points: parseInt(e.target.value) } } })} />
+                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules?.playoff?.points || 25} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, playoff: { ...(localConfig.matchRules?.playoff || {}), points: parseInt(e.target.value) } } })} />
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tie-Break</label>
-                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules.playoff?.tieBreak || 15} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, playoff: { ...(localConfig.matchRules.playoff || {}), tieBreak: parseInt(e.target.value) } } })} />
+                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules?.playoff?.tieBreak || 15} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, playoff: { ...(localConfig.matchRules?.playoff || {}), tieBreak: parseInt(e.target.value) } } })} />
                       </div>
                     </div>
                   </div>
