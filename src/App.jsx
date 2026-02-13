@@ -677,7 +677,7 @@ const AdminDashboard = ({
 
                         {/* Only show Start/Resume if not finished */}
                         {m.status !== 'finished' && (
-                          <button onClick={() => m.status === 'live' ? startMatch(m.id) : handleStartMatchClick(m)} className="px-4 py-2 bg-green-500 hover:bg-green-400 text-white rounded font-bold text-xs uppercase tracking-wider shadow-lg shadow-green-500/20">
+                          <button onClick={() => startMatch(m.id)} className="px-4 py-2 bg-green-500 hover:bg-green-400 text-white rounded font-bold text-xs uppercase tracking-wider shadow-lg shadow-green-500/20">
                             {m.status === 'live' ? 'Resume' : 'Start Match'}
                           </button>
                         )}
