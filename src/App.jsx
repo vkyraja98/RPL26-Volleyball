@@ -43,7 +43,7 @@ const db = getFirestore(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
 // --- Helpers ---
-const getTeam = (teams, id) => teams.find(t => t.id === id) || { name: '...', color: 'bg-slate-700' };
+const getTeam = (teams, id) => (Array.isArray(teams) ? teams.find(t => t.id === id) : null) || { name: '...', color: 'bg-slate-700' };
 
 // --- Configuration ---
 // Update Config to support stage rules
@@ -279,13 +279,15 @@ const MatchCardPublic = ({ match, teams, players, config, isLiveFeature = false 
 };
 
 // --- Admin Scorer ---
-const AdminScorer = ({ match, teams, config, handleScore, setView, updateDoc, db, appId }) => {
+const AdminScorer = ({ match, teams = [], config, handleScore, setView, updateDoc, db, appId }) => {
   if (!match) return <div className="p-10 text-white">Loading Match...</div>;
 
   const [swapSides, setSwapSides] = useState(false); // Visual Only
 
-  const teamA = getTeam(teams, match.teamA);
-  const teamB = getTeam(teams, match.teamB);
+  // Safe Team Access
+  const safeTeams = Array.isArray(teams) ? teams : [];
+  const teamA = getTeam(safeTeams, match.teamA);
+  const teamB = getTeam(safeTeams, match.teamB);
 
   // Safe Scores Access
   const currentScores = (match.scores && match.scores.length > 0) ? match.scores : [{ a: 0, b: 0 }];
@@ -1088,23 +1090,37 @@ export default function App() {
 
         <style>{`
           @media print {
-            body { background: white; color: black; }
+            @page { margin: 20px; }
+            body { background: white; color: black; -webkit-print-color-adjust: exact; }
             nav, button, .no-print { display: none !important; }
-            .bg-slate-950 { background: white !important; }
+            .bg-slate-950 { background: white !important; overflow: visible !important; height: auto !important; }
             .text-white { color: black !important; }
             .text-slate-400 { color: #555 !important; }
-            .bg-white\\/5 { background: #f0f0f0 !important; border: 1px solid #ccc !important; }
-            .bg-white\\/10 { background: #e0e0e0 !important; }
-            .absolute { display: none; }
-            .min-h-screen { min-height: auto; }
-            table { width: 100%; border-collapse: collapse; }
-            th, td { border: 1px solid #ddd; padding: 8px; }
-            .shadow-lg, .shadow-xl { shadow: none !important; }
+            .bg-white\\/5 { background: #fff !important; border: 1px solid #ddd !important; break-inside: avoid; }
+            .bg-white\\/10 { background: #eee !important; }
+            .absolute { display: none !important; }
+            .min-h-screen { min-height: auto !important; height: auto !important; overflow: visible !important; }
+            .grid { display: block !important; } 
+            .col-span-2 { display: block !important; width: 100% !important; }
+            .gap-6 { gap: 10px !important; }
+            /* Header Display */
+            .print-header { display: block !important; text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+            .print-header h1 { font-size: 24pt; font-weight: 900; margin: 0; }
+            .print-header p { font-size: 12pt; margin: 0; }
+            /* Card Tweaks */
+            .p-6, .p-8, .md\\:p-12 { padding: 10px !important; margin-bottom: 10px !important; }
+            table { width: 100%; border-collapse: collapse; font-size: 10pt; }
+            th, td { border: 1px solid #ccc; padding: 4px; color: black !important; }
           }
         `}</style>
 
-        <div className="relative z-10 max-w-6xl mx-auto px-4 py-8">
+        {/* Print Only Header */}
+        <div className="print-header hidden text-black">
+          <h1>RPL26 Volleyball</h1>
+          <p>Official Schedule & Results</p>
+        </div>
 
+        <div className="relative z-10 max-w-6xl mx-auto px-4 py-8">
           {/* Live Section */}
           {liveMatches.length > 0 && (
             <section className="mb-12 animate-fade-in text-center no-print">
@@ -1274,7 +1290,7 @@ export default function App() {
   };
 
   // --- Router ---
-  if (view === 'admin-scorer') return <AdminScorer match={matches.find(m => m.id === scorerMatchId)} teams={teams} config={config} handleScore={handleScore} setView={setView} />;
+  if (view === 'admin-scorer') return <AdminScorer match={matches.find(m => m.id === scorerMatchId)} teams={teams} config={config} handleScore={handleScore} setView={setView} updateDoc={updateDoc} db={db} appId={appId} />;
   if (view === 'login') return <div className="min-h-screen"><Navigation config={config} view={view} setView={setView} isAdmin={isAdmin} /><LoginView loginInput={loginInput} setLoginInput={setLoginInput} handleAdminLogin={handleAdminLogin} setView={setView} /></div>;
 
   return (
