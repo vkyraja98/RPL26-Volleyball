@@ -1,18 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Trophy, Users, Calendar, Settings, Play, Activity, 
-  ChevronRight, Plus, Trash2, Save, ArrowLeft, Menu, 
+import {
+  Trophy, Users, Calendar, Settings, Play, Activity,
+  ChevronRight, Plus, Trash2, Save, ArrowLeft, Menu,
   X, Award, Clock, CheckCircle2, Lock, LogIn, MonitorPlay,
   TrendingUp, Hash
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import { 
-  getFirestore, collection, addDoc, updateDoc, 
-  doc, onSnapshot, query, orderBy, deleteDoc, setDoc 
+import {
+  getFirestore, collection, addDoc, updateDoc,
+  doc, onSnapshot, query, orderBy, deleteDoc, setDoc
 } from 'firebase/firestore';
-import { 
-  getAuth, signInAnonymously, onAuthStateChanged, 
-  signInWithCustomToken 
+import {
+  getAuth, signInAnonymously, onAuthStateChanged,
+  signInWithCustomToken
 } from 'firebase/auth';
 
 /**
@@ -25,7 +25,7 @@ import {
  */
 
 // --- Configuration ---
-const ADMIN_PASSWORD = "RPL@vb"; 
+const ADMIN_PASSWORD = "RPL@vb";
 
 // --- Firebase Init ---
 const firebaseConfig = {
@@ -45,7 +45,7 @@ const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 // --- Default Rules Config ---
 const DEFAULT_CONFIG = {
   pointsPerSet: 25,
-  setsPerMatch: 3, 
+  setsPerMatch: 3,
   tieBreakerPoints: 15,
   tournamentName: 'PRO VOLLEY LEAGUE 2024'
 };
@@ -99,25 +99,23 @@ const Navigation = ({ config, view, setView, isAdmin }) => (
           </span>
         </div>
       </div>
-      
+
       <div className="flex gap-2">
-        <button 
+        <button
           onClick={() => setView('public')}
-          className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
-            view === 'public' 
-              ? 'bg-white text-slate-900 shadow-[0_0_20px_rgba(255,255,255,0.3)]' 
-              : 'text-slate-400 hover:text-white'
-          }`}
+          className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${view === 'public'
+            ? 'bg-white text-slate-900 shadow-[0_0_20px_rgba(255,255,255,0.3)]'
+            : 'text-slate-400 hover:text-white'
+            }`}
         >
           Public Hub
         </button>
-        <button 
+        <button
           onClick={() => isAdmin ? setView('admin-dashboard') : setView('login')}
-          className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
-            view.startsWith('admin') || view === 'login' 
-              ? 'bg-blue-600 text-white shadow-lg' 
-              : 'text-slate-400 hover:text-white'
-          }`}
+          className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${view.startsWith('admin') || view === 'login'
+            ? 'bg-blue-600 text-white shadow-lg'
+            : 'text-slate-400 hover:text-white'
+            }`}
         >
           Admin
         </button>
@@ -138,7 +136,7 @@ const LoginView = ({ loginInput, setLoginInput, handleAdminLogin, setView }) => 
       </div>
       <h2 className="text-3xl font-black text-center text-white mb-2 uppercase tracking-tight">Admin Access</h2>
       <p className="text-slate-400 text-center text-sm mb-8">Authorized Personnel Only</p>
-      
+
       <form onSubmit={handleAdminLogin} className="space-y-4">
         <div>
           <input
@@ -150,13 +148,13 @@ const LoginView = ({ loginInput, setLoginInput, handleAdminLogin, setView }) => 
             autoFocus
           />
         </div>
-        <button 
+        <button
           type="submit"
           className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 rounded-xl hover:from-blue-500 hover:to-indigo-500 transition-all transform active:scale-95 shadow-lg flex items-center justify-center gap-2 uppercase tracking-wider text-sm"
         >
           <LogIn size={18} /> Authenticate
         </button>
-        <button 
+        <button
           type="button"
           onClick={() => setView('public')}
           className="w-full text-slate-500 text-xs font-bold uppercase tracking-widest py-4 hover:text-white transition-colors"
@@ -169,9 +167,11 @@ const LoginView = ({ loginInput, setLoginInput, handleAdminLogin, setView }) => 
 );
 
 // --- Match Card Public ---
-const MatchCardPublic = ({ match, teams, config }) => {
+const MatchCardPublic = ({ match, teams, players, config }) => {
   const teamA = getTeam(teams, match.teamA);
   const teamB = getTeam(teams, match.teamB);
+  const captainA = players.find(p => p.teamId === match.teamA && p.isCaptain);
+  const captainB = players.find(p => p.teamId === match.teamB && p.isCaptain);
   const date = new Date(match.startTime);
 
   return (
@@ -194,6 +194,7 @@ const MatchCardPublic = ({ match, teams, config }) => {
             </div>
             <div className="text-center">
               <h3 className="text-white font-bold uppercase tracking-wide leading-tight text-sm md:text-base">{teamA.name}</h3>
+              {captainA && <div className="text-[10px] text-yellow-400 font-bold uppercase tracking-widest mt-1">Has Captain: {captainA.name}</div>}
             </div>
           </div>
 
@@ -201,25 +202,25 @@ const MatchCardPublic = ({ match, teams, config }) => {
           <div className="flex flex-col items-center justify-center w-1/3">
             {match.status === 'scheduled' ? (
               <div className="text-center">
-                  <div className="text-4xl font-black text-white/20 italic tracking-tighter">VS</div>
-                  <div className="mt-2 flex flex-col items-center text-blue-400">
-                    <Calendar size={14} className="mb-1" />
-                    <span className="text-xs font-bold uppercase tracking-wider">{date.toLocaleDateString([], {month:'short', day:'numeric'})}</span>
-                    <span className="text-xs font-mono">{date.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
-                  </div>
+                <div className="text-4xl font-black text-white/20 italic tracking-tighter">VS</div>
+                <div className="mt-2 flex flex-col items-center text-blue-400">
+                  <Calendar size={14} className="mb-1" />
+                  <span className="text-xs font-bold uppercase tracking-wider">{date.toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
+                  <span className="text-xs font-mono">{date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
               </div>
             ) : (
               <div className="flex flex-col items-center">
-                  <div className="flex items-center gap-4">
-                    <span className={`text-4xl md:text-5xl font-black ${match.winner === match.teamA ? 'text-green-400 drop-shadow-[0_0_10px_rgba(74,222,128,0.5)]' : 'text-white'}`}>{match.setsA}</span>
-                    <span className="text-white/20 text-2xl font-black">-</span>
-                    <span className={`text-4xl md:text-5xl font-black ${match.winner === match.teamB ? 'text-green-400 drop-shadow-[0_0_10px_rgba(74,222,128,0.5)]' : 'text-white'}`}>{match.setsB}</span>
+                <div className="flex items-center gap-4">
+                  <span className={`text-4xl md:text-5xl font-black ${match.winner === match.teamA ? 'text-green-400 drop-shadow-[0_0_10px_rgba(74,222,128,0.5)]' : 'text-white'}`}>{match.setsA}</span>
+                  <span className="text-white/20 text-2xl font-black">-</span>
+                  <span className={`text-4xl md:text-5xl font-black ${match.winner === match.teamB ? 'text-green-400 drop-shadow-[0_0_10px_rgba(74,222,128,0.5)]' : 'text-white'}`}>{match.setsB}</span>
+                </div>
+                {match.status === 'live' && (
+                  <div className="mt-2 px-3 py-1 bg-red-500/20 border border-red-500/50 rounded text-red-400 text-[10px] font-black uppercase tracking-widest animate-pulse">
+                    Set {match.scores.length}
                   </div>
-                  {match.status === 'live' && (
-                    <div className="mt-2 px-3 py-1 bg-red-500/20 border border-red-500/50 rounded text-red-400 text-[10px] font-black uppercase tracking-widest animate-pulse">
-                      Set {match.scores.length}
-                    </div>
-                  )}
+                )}
               </div>
             )}
           </div>
@@ -231,6 +232,7 @@ const MatchCardPublic = ({ match, teams, config }) => {
             </div>
             <div className="text-center">
               <h3 className="text-white font-bold uppercase tracking-wide leading-tight text-sm md:text-base">{teamB.name}</h3>
+              {captainB && <div className="text-[10px] text-yellow-400 font-bold uppercase tracking-widest mt-1">Has Captain: {captainB.name}</div>}
             </div>
           </div>
         </div>
@@ -259,7 +261,7 @@ const AdminScorer = ({ match, teams, config, handleScore, setView }) => {
 
   const teamA = getTeam(teams, match.teamA);
   const teamB = getTeam(teams, match.teamB);
-  const currentScores = match.scores.length > 0 ? match.scores : [{a:0, b:0}];
+  const currentScores = match.scores.length > 0 ? match.scores : [{ a: 0, b: 0 }];
   const setIdx = currentScores.length;
   const scores = currentScores[setIdx - 1];
 
@@ -289,33 +291,33 @@ const AdminScorer = ({ match, teams, config, handleScore, setView }) => {
       {/* Main Controls */}
       <div className="flex-1 grid grid-cols-2">
         {/* Team A */}
-        <div 
+        <div
           onClick={() => handleScore('A')}
           className="relative flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 active:bg-slate-200 transition-colors border-r border-slate-200 select-none group"
         >
-            <div className={`absolute top-0 left-0 right-0 h-4 ${teamA.color}`} />
-            <h2 className="text-3xl font-bold text-slate-700 mb-6 uppercase tracking-tight">{teamA.name}</h2>
-            <div className="text-[180px] font-black text-slate-900 leading-none tracking-tighter tabular-nums group-active:scale-95 transition-transform">
-              {scores.a}
-            </div>
-            <div className="mt-8 flex items-center gap-2 text-slate-400 font-bold uppercase tracking-widest">
-              Sets Won <span className="bg-slate-800 text-white px-3 py-1 rounded-full text-lg">{match.setsA}</span>
-            </div>
+          <div className={`absolute top-0 left-0 right-0 h-4 ${teamA.color}`} />
+          <h2 className="text-3xl font-bold text-slate-700 mb-6 uppercase tracking-tight">{teamA.name}</h2>
+          <div className="text-[180px] font-black text-slate-900 leading-none tracking-tighter tabular-nums group-active:scale-95 transition-transform">
+            {scores.a}
+          </div>
+          <div className="mt-8 flex items-center gap-2 text-slate-400 font-bold uppercase tracking-widest">
+            Sets Won <span className="bg-slate-800 text-white px-3 py-1 rounded-full text-lg">{match.setsA}</span>
+          </div>
         </div>
 
         {/* Team B */}
-        <div 
+        <div
           onClick={() => handleScore('B')}
           className="relative flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 active:bg-slate-200 transition-colors select-none group"
         >
-            <div className={`absolute top-0 left-0 right-0 h-4 ${teamB.color}`} />
-            <h2 className="text-3xl font-bold text-slate-700 mb-6 uppercase tracking-tight">{teamB.name}</h2>
-            <div className="text-[180px] font-black text-slate-900 leading-none tracking-tighter tabular-nums group-active:scale-95 transition-transform">
-              {scores.b}
-            </div>
-            <div className="mt-8 flex items-center gap-2 text-slate-400 font-bold uppercase tracking-widest">
-              Sets Won <span className="bg-slate-800 text-white px-3 py-1 rounded-full text-lg">{match.setsB}</span>
-            </div>
+          <div className={`absolute top-0 left-0 right-0 h-4 ${teamB.color}`} />
+          <h2 className="text-3xl font-bold text-slate-700 mb-6 uppercase tracking-tight">{teamB.name}</h2>
+          <div className="text-[180px] font-black text-slate-900 leading-none tracking-tighter tabular-nums group-active:scale-95 transition-transform">
+            {scores.b}
+          </div>
+          <div className="mt-8 flex items-center gap-2 text-slate-400 font-bold uppercase tracking-widest">
+            Sets Won <span className="bg-slate-800 text-white px-3 py-1 rounded-full text-lg">{match.setsB}</span>
+          </div>
         </div>
       </div>
 
@@ -330,11 +332,12 @@ const AdminScorer = ({ match, teams, config, handleScore, setView }) => {
 };
 
 // --- Admin Dashboard ---
-const AdminDashboard = ({ 
-  teams, matches, config, updateConfig, setIsAdmin, setView, 
-  adminTab, setAdminTab, createFixture, startMatch, deleteDoc, addDoc, db, appId 
+const AdminDashboard = ({
+  teams, matches, players, config, updateConfig, setIsAdmin, setView,
+  adminTab, setAdminTab, createFixture, startMatch, deleteDoc, addDoc, updateDoc, db, appId
 }) => {
   const [newItem, setNewItem] = useState('');
+  const [newPlayer, setNewPlayer] = useState({ name: '', teamId: '', isCaptain: false });
   const [fixture, setFixture] = useState({ ta: '', tb: '', d: '', t: '' });
   const [localConfig, setLocalConfig] = useState(config);
 
@@ -356,9 +359,10 @@ const AdminDashboard = ({
           {[
             { id: 'fixtures', icon: Calendar, label: 'Match Schedule' },
             { id: 'teams', icon: Users, label: 'Manage Teams' },
+            { id: 'players', icon: Users, label: 'Manage Players' },
             { id: 'settings', icon: Settings, label: 'Rules & Config' },
           ].map(tab => (
-            <button 
+            <button
               key={tab.id}
               onClick={() => setAdminTab(tab.id)}
               className={`flex items-center gap-3 px-4 py-3 rounded-lg font-bold transition-colors text-left ${adminTab === tab.id ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
@@ -376,48 +380,48 @@ const AdminDashboard = ({
                 <h3 className="font-bold text-lg mb-4 text-slate-700">Schedule New Match</h3>
                 <form onSubmit={(e) => {
                   e.preventDefault();
-                  if(fixture.ta && fixture.tb && fixture.ta !== fixture.tb) {
+                  if (fixture.ta && fixture.tb && fixture.ta !== fixture.tb) {
                     createFixture({ teamA: fixture.ta, teamB: fixture.tb, date: fixture.d, time: fixture.t });
                     setFixture({ ta: '', tb: '', d: '', t: '' });
                   }
                 }} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
-                    <select className="p-3 rounded border" value={fixture.ta} onChange={e => setFixture({...fixture, ta: e.target.value})}>
+                    <select className="p-3 rounded border" value={fixture.ta} onChange={e => setFixture({ ...fixture, ta: e.target.value })}>
                       <option value="">Select Team A</option>
                       {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
-                    <select className="p-3 rounded border" value={fixture.tb} onChange={e => setFixture({...fixture, tb: e.target.value})}>
+                    <select className="p-3 rounded border" value={fixture.tb} onChange={e => setFixture({ ...fixture, tb: e.target.value })}>
                       <option value="">Select Team B</option>
                       {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
-                    <input type="date" className="p-3 rounded border" value={fixture.d} onChange={e => setFixture({...fixture, d: e.target.value})} required />
-                    <input type="time" className="p-3 rounded border" value={fixture.t} onChange={e => setFixture({...fixture, t: e.target.value})} required />
+                    <input type="date" className="p-3 rounded border" value={fixture.d} onChange={e => setFixture({ ...fixture, d: e.target.value })} required />
+                    <input type="time" className="p-3 rounded border" value={fixture.t} onChange={e => setFixture({ ...fixture, t: e.target.value })} required />
                   </div>
                   <button className="w-full py-3 bg-blue-600 text-white font-bold rounded hover:bg-blue-700">Add to Schedule</button>
                 </form>
               </Card>
 
               <div className="space-y-3">
-                  {matches.sort((a,b) => new Date(a.startTime) - new Date(b.startTime)).map(m => (
-                    <Card key={m.id} className="p-4 flex justify-between items-center">
-                      <div>
-                        <div className="font-bold text-slate-800">{getTeam(teams, m.teamA).name} vs {getTeam(teams, m.teamB).name}</div>
-                        <div className="text-xs text-slate-500">{new Date(m.startTime).toLocaleString()}</div>
-                      </div>
-                      <div className="flex gap-2">
-                        {m.status !== 'finished' && (
-                          <button onClick={() => startMatch(m.id)} className="px-4 py-2 bg-green-600 text-white rounded font-bold text-sm hover:bg-green-700">
-                            {m.status === 'live' ? 'Resume' : 'Start'}
-                          </button>
-                        )}
-                        <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', m.id))} className="p-2 text-red-400 hover:bg-red-50 rounded">
-                          <Trash2 size={16} />
+                {matches.sort((a, b) => new Date(a.startTime) - new Date(b.startTime)).map(m => (
+                  <Card key={m.id} className="p-4 flex justify-between items-center">
+                    <div>
+                      <div className="font-bold text-slate-800">{getTeam(teams, m.teamA).name} vs {getTeam(teams, m.teamB).name}</div>
+                      <div className="text-xs text-slate-500">{new Date(m.startTime).toLocaleString()}</div>
+                    </div>
+                    <div className="flex gap-2">
+                      {m.status !== 'finished' && (
+                        <button onClick={() => startMatch(m.id)} className="px-4 py-2 bg-green-600 text-white rounded font-bold text-sm hover:bg-green-700">
+                          {m.status === 'live' ? 'Resume' : 'Start'}
                         </button>
-                      </div>
-                    </Card>
-                  ))}
+                      )}
+                      <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', m.id))} className="p-2 text-red-400 hover:bg-red-50 rounded">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </Card>
+                ))}
               </div>
             </>
           )}
@@ -425,30 +429,33 @@ const AdminDashboard = ({
           {/* TEAMS TAB */}
           {adminTab === 'teams' && (
             <>
-                <Card className="p-6">
+              <Card className="p-6">
                 <form onSubmit={(e) => {
                   e.preventDefault();
-                  if(newItem) {
+                  if (newItem) {
                     const colors = ['bg-red-500', 'bg-blue-500', 'bg-emerald-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500', 'bg-indigo-500', 'bg-cyan-500'];
-                    addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'teams'), { name: newItem, color: colors[Math.floor(Math.random()*colors.length)] });
+                    addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'teams'), { name: newItem, color: colors[Math.floor(Math.random() * colors.length)] });
                     setNewItem('');
                   }
                 }} className="flex gap-3">
                   <input className="flex-1 p-3 border rounded" placeholder="Team Name" value={newItem} onChange={e => setNewItem(e.target.value)} />
                   <button className="px-6 bg-blue-600 text-white font-bold rounded">Add</button>
                 </form>
-                </Card>
-                <div className="grid gap-3">
-                  {teams.map(t => (
-                    <Card key={t.id} className="p-4 flex justify-between items-center">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded ${t.color}`} />
-                        <span className="font-bold">{t.name}</span>
+              </Card>
+              <div className="grid gap-3">
+                {teams.map(t => (
+                  <Card key={t.id} className="p-4 flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded ${t.color}`} />
+                      <div>
+                        <span className="font-bold block">{t.name}</span>
+                        <span className="text-xs text-slate-500">Squad: {players.filter(p => p.teamId === t.id).length} Players</span>
                       </div>
-                      <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teams', t.id))} className="text-red-400"><Trash2 size={18} /></button>
-                    </Card>
-                  ))}
-                </div>
+                    </div>
+                    <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teams', t.id))} className="text-red-400"><Trash2 size={18} /></button>
+                  </Card>
+                ))}
+              </div>
             </>
           )}
 
@@ -457,55 +464,55 @@ const AdminDashboard = ({
             <Card className="p-8">
               <h3 className="text-xl font-bold mb-6 border-b pb-4">Tournament Configuration</h3>
               <form onSubmit={handleSaveRules} className="space-y-6">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Tournament Name</label>
+                  <input
+                    type="text"
+                    className="w-full p-3 border border-slate-300 rounded-lg"
+                    value={localConfig.tournamentName}
+                    onChange={e => setLocalConfig({ ...localConfig, tournamentName: e.target.value })}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Tournament Name</label>
-                    <input 
-                      type="text" 
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Points per Set</label>
+                    <input
+                      type="number"
                       className="w-full p-3 border border-slate-300 rounded-lg"
-                      value={localConfig.tournamentName} 
-                      onChange={e => setLocalConfig({...localConfig, tournamentName: e.target.value})} 
+                      value={localConfig.pointsPerSet === '' ? '' : localConfig.pointsPerSet}
+                      onChange={e => setLocalConfig({ ...localConfig, pointsPerSet: e.target.value === '' ? '' : parseInt(e.target.value) })}
                     />
+                    <p className="text-xs text-slate-500 mt-1">Standard set target (e.g. 25)</p>
                   </div>
-                  
-                  <div className="grid grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2">Points per Set</label>
-                      <input 
-                        type="number" 
-                        className="w-full p-3 border border-slate-300 rounded-lg"
-                        value={localConfig.pointsPerSet === '' ? '' : localConfig.pointsPerSet}
-                        onChange={e => setLocalConfig({...localConfig, pointsPerSet: e.target.value === '' ? '' : parseInt(e.target.value)})} 
-                      />
-                      <p className="text-xs text-slate-500 mt-1">Standard set target (e.g. 25)</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2">Tie-Breaker Points</label>
-                      <input 
-                        type="number" 
-                        className="w-full p-3 border border-slate-300 rounded-lg"
-                        value={localConfig.tieBreakerPoints === '' ? '' : localConfig.tieBreakerPoints}
-                        onChange={e => setLocalConfig({...localConfig, tieBreakerPoints: e.target.value === '' ? '' : parseInt(e.target.value)})} 
-                      />
-                      <p className="text-xs text-slate-500 mt-1">Deciding set target (e.g. 15)</p>
-                    </div>
-                  </div>
-
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Sets per Match (Best Of)</label>
-                    <select 
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Tie-Breaker Points</label>
+                    <input
+                      type="number"
                       className="w-full p-3 border border-slate-300 rounded-lg"
-                      value={localConfig.setsPerMatch} 
-                      onChange={e => setLocalConfig({...localConfig, setsPerMatch: parseInt(e.target.value)})}
-                    >
-                      <option value={1}>1 Set</option>
-                      <option value={3}>3 Sets</option>
-                      <option value={5}>5 Sets</option>
-                    </select>
+                      value={localConfig.tieBreakerPoints === '' ? '' : localConfig.tieBreakerPoints}
+                      onChange={e => setLocalConfig({ ...localConfig, tieBreakerPoints: e.target.value === '' ? '' : parseInt(e.target.value) })}
+                    />
+                    <p className="text-xs text-slate-500 mt-1">Deciding set target (e.g. 15)</p>
                   </div>
+                </div>
 
-                  <button className="w-full py-4 bg-slate-900 text-white font-bold rounded-lg hover:bg-slate-800 transition-colors flex justify-center items-center gap-2">
-                    <Save size={18} /> Save Configuration
-                  </button>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Sets per Match (Best Of)</label>
+                  <select
+                    className="w-full p-3 border border-slate-300 rounded-lg"
+                    value={localConfig.setsPerMatch}
+                    onChange={e => setLocalConfig({ ...localConfig, setsPerMatch: parseInt(e.target.value) })}
+                  >
+                    <option value={1}>1 Set</option>
+                    <option value={3}>3 Sets</option>
+                    <option value={5}>5 Sets</option>
+                  </select>
+                </div>
+
+                <button className="w-full py-4 bg-slate-900 text-white font-bold rounded-lg hover:bg-slate-800 transition-colors flex justify-center items-center gap-2">
+                  <Save size={18} /> Save Configuration
+                </button>
               </form>
             </Card>
           )}
@@ -519,6 +526,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [teams, setTeams] = useState([]);
+  const [players, setPlayers] = useState([]);
   const [matches, setMatches] = useState([]);
   const [config, setAppConfig] = useState(DEFAULT_CONFIG);
   const [view, setView] = useState('public');
@@ -543,17 +551,19 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return;
-    const unsubTeams = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'teams'), 
+    const unsubTeams = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'teams'),
       (snap) => setTeams(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-    const unsubMatches = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'matches'), 
+    const unsubPlayers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'players'),
+      (snap) => setPlayers(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unsubMatches = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'matches'),
       (snap) => setMatches(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-    const unsubConfig = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'main'), 
+    const unsubConfig = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'main'),
       (snap) => snap.exists() && setAppConfig(snap.data()));
     return () => { unsubTeams(); unsubMatches(); unsubConfig(); };
   }, [user]);
 
   // --- Logic ---
-  
+
   const handleAdminLogin = (e) => {
     e.preventDefault();
     if (loginInput === ADMIN_PASSWORD) {
@@ -599,7 +609,7 @@ export default function App() {
 
     const currentSetIndex = currentScores.length - 1;
     const currentSet = currentScores[currentSetIndex];
-    
+
     const newSetScore = {
       a: team === 'A' ? currentSet.a + 1 : currentSet.a,
       b: team === 'B' ? currentSet.b + 1 : currentSet.b
@@ -614,25 +624,25 @@ export default function App() {
     let updates = { scores: currentScores };
 
     if (hasReachedTarget && diff >= 2) {
-       const setWinner = newSetScore.a > newSetScore.b ? 'A' : 'B';
-       const newSetsA = setWinner === 'A' ? match.setsA + 1 : match.setsA;
-       const newSetsB = setWinner === 'B' ? match.setsB + 1 : match.setsB;
-       
-       updates.setsA = newSetsA;
-       updates.setsB = newSetsB;
+      const setWinner = newSetScore.a > newSetScore.b ? 'A' : 'B';
+      const newSetsA = setWinner === 'A' ? match.setsA + 1 : match.setsA;
+      const newSetsB = setWinner === 'B' ? match.setsB + 1 : match.setsB;
 
-       const setsNeededToWin = Math.ceil(config.setsPerMatch / 2);
-       if (newSetsA === setsNeededToWin) {
-         updates.status = 'finished';
-         updates.winner = match.teamA;
-         setTimeout(() => setView('admin-dashboard'), 2000);
-       } else if (newSetsB === setsNeededToWin) {
-         updates.status = 'finished';
-         updates.winner = match.teamB;
-         setTimeout(() => setView('admin-dashboard'), 2000);
-       } else {
-         updates.scores = [...currentScores, { a: 0, b: 0 }];
-       }
+      updates.setsA = newSetsA;
+      updates.setsB = newSetsB;
+
+      const setsNeededToWin = Math.ceil(config.setsPerMatch / 2);
+      if (newSetsA === setsNeededToWin) {
+        updates.status = 'finished';
+        updates.winner = match.teamA;
+        setTimeout(() => setView('admin-dashboard'), 2000);
+      } else if (newSetsB === setsNeededToWin) {
+        updates.status = 'finished';
+        updates.winner = match.teamB;
+        setTimeout(() => setView('admin-dashboard'), 2000);
+      } else {
+        updates.scores = [...currentScores, { a: 0, b: 0 }];
+      }
     }
     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', scorerMatchId), updates);
   };
@@ -641,7 +651,7 @@ export default function App() {
   const standings = useMemo(() => {
     const stats = teams.map(team => {
       const teamMatches = matches.filter(m => (m.teamA === team.id || m.teamB === team.id) && m.status === 'finished');
-      
+
       let played = 0, won = 0, lost = 0;
       let setsWon = 0, setsLost = 0;
       let pointsWon = 0, pointsLost = 0;
@@ -650,7 +660,7 @@ export default function App() {
       teamMatches.forEach(m => {
         played++;
         const isTeamA = m.teamA === team.id;
-        
+
         // Match Result
         if (m.winner === team.id) {
           won++;
@@ -679,7 +689,8 @@ export default function App() {
         played, won, lost,
         setsWon, setsLost, setRatio,
         pointsWon, pointsLost, pointRatio,
-        leaguePoints
+        leaguePoints,
+        squadSize: players.filter(p => p.teamId === team.id).length
       };
     });
 
@@ -695,8 +706,11 @@ export default function App() {
   // --- Sub-Components ---
   const PublicView = () => {
     const liveMatches = matches.filter(m => m.status === 'live');
-    const upcomingMatches = matches.filter(m => m.status === 'scheduled').sort((a,b) => new Date(a.startTime) - new Date(b.startTime));
-    const finishedMatches = matches.filter(m => m.status === 'finished').sort((a,b) => new Date(b.startTime) - new Date(a.startTime));
+    const upcomingMatches = matches.filter(m => m.status === 'scheduled').sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+    const finishedMatches = matches.filter(m => m.status === 'finished').sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+
+    // Pass players to AdminDashboard etc but here we use standings which already has squadSize calculated
+    // For MatchCardPublic, we might want to show captains later, but for now Squad Size is in Standings.
 
     return (
       <div className="min-h-screen bg-slate-950 font-sans text-slate-100 pb-20 relative overflow-hidden">
@@ -706,7 +720,7 @@ export default function App() {
         <div className="absolute top-[200px] -left-[200px] w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[100px] pointer-events-none" />
 
         <div className="relative z-10 max-w-6xl mx-auto px-4 py-8">
-          
+
           {/* Live Section */}
           {liveMatches.length > 0 && (
             <section className="mb-12 animate-fade-in">
@@ -717,7 +731,7 @@ export default function App() {
                 <h2 className="text-2xl font-black uppercase tracking-widest text-white">Live Action</h2>
               </div>
               <div className="grid lg:grid-cols-2 gap-6">
-                {liveMatches.map(m => <MatchCardPublic key={m.id} match={m} teams={teams} config={config} />)}
+                {liveMatches.map(m => <MatchCardPublic key={m.id} match={m} teams={teams} players={players} config={config} />)}
               </div>
             </section>
           )}
@@ -733,11 +747,10 @@ export default function App() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm uppercase tracking-wider transition-all ${
-                    activeTab === tab.id 
-                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' 
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
-                  }`}
+                  className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm uppercase tracking-wider transition-all ${activeTab === tab.id
+                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg'
+                    : 'text-slate-400 hover:text-white hover:bg-white/5'
+                    }`}
                 >
                   <tab.icon size={16} /> {tab.label}
                 </button>
@@ -750,14 +763,14 @@ export default function App() {
             {activeTab === 'fixtures' && (
               <div className="grid md:grid-cols-2 gap-6">
                 {upcomingMatches.length === 0 && <div className="col-span-2 text-center text-slate-500 py-12 italic">No upcoming matches scheduled</div>}
-                {upcomingMatches.map(m => <MatchCardPublic key={m.id} match={m} teams={teams} config={config} />)}
+                {upcomingMatches.map(m => <MatchCardPublic key={m.id} match={m} teams={teams} players={players} config={config} />)}
               </div>
             )}
 
             {activeTab === 'results' && (
               <div className="grid md:grid-cols-2 gap-6">
-                 {finishedMatches.length === 0 && <div className="col-span-2 text-center text-slate-500 py-12 italic">No matches finished yet</div>}
-                 {finishedMatches.map(m => <MatchCardPublic key={m.id} match={m} teams={teams} config={config} />)}
+                {finishedMatches.length === 0 && <div className="col-span-2 text-center text-slate-500 py-12 italic">No matches finished yet</div>}
+                {finishedMatches.map(m => <MatchCardPublic key={m.id} match={m} teams={teams} players={players} config={config} />)}
               </div>
             )}
 
@@ -772,6 +785,7 @@ export default function App() {
                       <th className="p-5 text-center">W-L</th>
                       <th className="p-5 text-center hidden sm:table-cell">Set Ratio</th>
                       <th className="p-5 text-center hidden sm:table-cell">Point Ratio</th>
+                      <th className="p-5 text-center hidden sm:table-cell">Squad Size</th>
                       <th className="p-5 text-center bg-white/5 text-blue-300">PTS</th>
                     </tr>
                   </thead>
@@ -800,6 +814,9 @@ export default function App() {
                         <td className="p-5 text-center font-mono text-sm hidden sm:table-cell text-slate-400">
                           {team.pointRatio.toFixed(3)}
                         </td>
+                        <td className="p-5 text-center font-mono text-sm hidden sm:table-cell text-slate-400">
+                          {team.squadSize}
+                        </td>
                         <td className="p-5 text-center bg-white/5">
                           <span className="text-2xl font-black text-blue-400">{team.leaguePoints}</span>
                         </td>
@@ -822,11 +839,11 @@ export default function App() {
   return (
     <div className="min-h-screen">
       <Navigation config={config} view={view} setView={setView} isAdmin={isAdmin} />
-      {view === 'public' ? <PublicView /> : 
-        <AdminDashboard 
-          teams={teams} matches={matches} config={config} updateConfig={updateConfig} 
-          setIsAdmin={setIsAdmin} setView={setView} adminTab={adminTab} setAdminTab={setAdminTab} 
-          createFixture={createFixture} startMatch={startMatch} deleteDoc={deleteDoc} addDoc={addDoc} db={db} appId={appId}
+      {view === 'public' ? <PublicView /> :
+        <AdminDashboard
+          teams={teams} matches={matches} players={players} config={config} updateConfig={updateConfig}
+          setIsAdmin={setIsAdmin} setView={setView} adminTab={adminTab} setAdminTab={setAdminTab}
+          createFixture={createFixture} startMatch={startMatch} deleteDoc={deleteDoc} addDoc={addDoc} updateDoc={updateDoc} db={db} appId={appId}
         />}
     </div>
   );
