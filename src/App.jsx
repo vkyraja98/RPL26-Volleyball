@@ -62,6 +62,44 @@ const DEFAULT_CONFIG = {
 
 // --- Components ---
 
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    this.setState({ error, errorInfo });
+    console.error("Uncaught error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-900 text-white p-10 flex flex-col items-center justify-center">
+          <h1 className="text-3xl font-bold text-red-500 mb-4">Something went wrong.</h1>
+          <div className="bg-black/50 p-6 rounded-lg font-mono text-xs max-w-2xl overflow-auto whitespace-pre-wrap text-red-300 border border-red-500/30">
+            {this.state.error && this.state.error.toString()}
+            <br />
+            {this.state.errorInfo && this.state.errorInfo.componentStack}
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-8 px-6 py-3 bg-blue-600 rounded-lg font-bold hover:bg-blue-500"
+          >
+            Reload Application
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // Standard Admin Card
 const Card = ({ children, className = '' }) => (
   <div className={`bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden ${className}`}>
@@ -1303,14 +1341,16 @@ export default function App() {
   if (view === 'login') return <div className="min-h-screen"><Navigation config={config} view={view} setView={setView} isAdmin={isAdmin} /><LoginView loginInput={loginInput} setLoginInput={setLoginInput} handleAdminLogin={handleAdminLogin} setView={setView} /></div>;
 
   return (
-    <div className="min-h-screen">
-      <Navigation config={config} view={view} setView={setView} isAdmin={isAdmin} />
-      {view === 'public' ? <PublicView /> :
-        <AdminDashboard
-          teams={teams} matches={matches} players={players} config={config} updateConfig={updateConfig}
-          setIsAdmin={setIsAdmin} setView={setView} adminTab={adminTab} setAdminTab={setAdminTab}
-          createFixture={createFixture} startMatch={startMatch} deleteDoc={deleteDoc} addDoc={addDoc} updateDoc={updateDoc} db={db} appId={appId}
-        />}
-    </div>
+    <ErrorBoundary>
+      <div className="min-h-screen">
+        <Navigation config={config} view={view} setView={setView} isAdmin={isAdmin} />
+        {view === 'public' ? <PublicView /> :
+          <AdminDashboard
+            teams={teams} matches={matches} players={players} config={config} updateConfig={updateConfig}
+            setIsAdmin={setIsAdmin} setView={setView} adminTab={adminTab} setAdminTab={setAdminTab}
+            createFixture={createFixture} startMatch={startMatch} deleteDoc={deleteDoc} addDoc={addDoc} updateDoc={updateDoc} db={db} appId={appId}
+          />}
+      </div>
+    </ErrorBoundary>
   );
 }
