@@ -297,21 +297,27 @@ const AdminScorer = ({ match, teams, config, handleScore, setView, updateDoc, db
   const setIdx = currentScores.length;
   // const scores = currentScores[setIdx - 1]; // Removed to use dynamic left/right
 
-  const isDecider = setIdx === config.setsPerMatch;
-  const base = isDecider ? config.tieBreakerPoints : config.pointsPerSet;
+  const stageRules = (config.matchRules && config.matchRules[match.stage]) || config.matchRules?.league || { sets: 3, points: 25, tieBreak: 15 };
+  const isDecider = setIdx === stageRules.sets;
+  const base = isDecider ? stageRules.tieBreak : stageRules.points;
   const maxScore = Math.max(currentScores[setIdx - 1].a, currentScores[setIdx - 1].b);
   const target = Math.max(base, (maxScore >= base - 1 ? maxScore + 2 : base));
 
   // Swap Alert Logic
   useEffect(() => {
-    if (isDecider) {
+    // Determine rules for this match
+    const stageRules = (config.matchRules && config.matchRules[match.stage]) || config.matchRules?.league || { sets: 3, points: 25, tieBreak: 15 };
+    const isDecidingSet = setIdx === stageRules.sets;
+    const base = isDecidingSet ? stageRules.tieBreak : stageRules.points;
+
+    if (isDecidingSet) {
       const switchPoint = Math.ceil(base / 2); // 8 for 15, 13 for 25
       const current = currentScores[setIdx - 1];
       if ((current.a === switchPoint && current.b < switchPoint) || (current.b === switchPoint && current.a < switchPoint)) {
         alert("SWAP SIDES NOW! (Reached Switch Point)");
       }
     }
-  }, [currentScores, isDecider, base, setIdx]);
+  }, [currentScores, setIdx, config, match.stage]);
 
   return (
     <div className="min-h-screen bg-slate-950 font-sans text-slate-100 flex flex-col relative overflow-hidden">
@@ -443,7 +449,8 @@ const AdminDashboard = ({
             teamB: teamIds[j],
             date: new Date().toISOString().split('T')[0],
             time: '18:00',
-            stage: 'league'
+            stage: 'league',
+            matchName: `League Match ${generated.length + 1}`
           });
         }
       }
@@ -559,6 +566,13 @@ const AdminDashboard = ({
                       </select>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
+                      <input type="text" className="p-3 rounded bg-slate-800 border border-slate-700 text-white focus:border-blue-500 outline-none" placeholder="Match Name (e.g. Qualifier 1)" value={fixture.matchName || ''} onChange={e => setFixture({ ...fixture, matchName: e.target.value })} />
+                      <select className="p-3 rounded bg-slate-800 border border-slate-700 text-white focus:border-blue-500 outline-none" value={fixture.stage} onChange={e => setFixture({ ...fixture, stage: e.target.value })}>
+                        <option value="league">League Rule Set</option>
+                        <option value="playoff">Playoff Rule Set</option>
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
                       <input type="date" className="p-3 rounded bg-slate-800 border border-slate-700 text-white focus:border-blue-500 outline-none" value={fixture.d} onChange={e => setFixture({ ...fixture, d: e.target.value })} required />
                       <input type="time" className="p-3 rounded bg-slate-800 border border-slate-700 text-white focus:border-blue-500 outline-none" value={fixture.t} onChange={e => setFixture({ ...fixture, t: e.target.value })} required />
                     </div>
@@ -571,7 +585,11 @@ const AdminDashboard = ({
                     <AdminGlassCard key={m.id} className="p-4 flex justify-between items-center group hover:bg-slate-800/80 transition-colors">
                       <div>
                         <div className="font-bold text-white text-lg">{getTeam(teams, m.teamA).name} vs {getTeam(teams, m.teamB).name}</div>
-                        <div className="text-xs text-slate-400 font-mono mt-1">{new Date(m.startTime).toLocaleString()}</div>
+                        <div className="text-xs text-slate-400 font-mono mt-1">
+                          {new Date(m.startTime).toLocaleString()}
+                          {m.matchName && <span className="ml-2 px-2 py-0.5 rounded bg-blue-900 text-blue-200">{m.matchName}</span>}
+                          <span className="ml-2 px-2 py-0.5 rounded bg-slate-700 text-slate-300 uppercase">{m.stage || 'league'}</span>
+                        </div>
                       </div>
                       <div className="flex gap-2">
                         {/* Only show Start/Resume if not finished */}
@@ -711,7 +729,7 @@ const AdminDashboard = ({
             {adminTab === 'settings' && (
               <AdminGlassCard className="p-8">
                 <h3 className="text-xl font-bold mb-6 text-white border-b border-white/10 pb-4">Tournament Configuration</h3>
-                <form onSubmit={handleSaveRules} className="space-y-6">
+                <form onSubmit={handleSaveRules} className="space-y-8">
                   <div>
                     <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Tournament Name</label>
                     <input
@@ -735,38 +753,42 @@ const AdminDashboard = ({
                     </select>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Points per Set</label>
-                      <input
-                        type="number"
-                        className="w-full p-3 bg-slate-800 border border-slate-700 rounded text-white focus:border-blue-500 outline-none"
-                        value={localConfig.pointsPerSet === '' ? '' : localConfig.pointsPerSet}
-                        onChange={e => setLocalConfig({ ...localConfig, pointsPerSet: e.target.value === '' ? '' : parseInt(e.target.value) })}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Tie-Breaker Points</label>
-                      <input
-                        type="number"
-                        className="w-full p-3 bg-slate-800 border border-slate-700 rounded text-white focus:border-blue-500 outline-none"
-                        value={localConfig.tieBreakerPoints === '' ? '' : localConfig.tieBreakerPoints}
-                        onChange={e => setLocalConfig({ ...localConfig, tieBreakerPoints: e.target.value === '' ? '' : parseInt(e.target.value) })}
-                      />
+                  {/* League Rules */}
+                  <div className="bg-slate-900/50 p-4 rounded-lg border border-white/5">
+                    <h4 className="text-yellow-400 font-bold mb-4 uppercase tracking-wider text-sm">League Stage Rules</h4>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Sets</label>
+                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules.league.sets} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, league: { ...localConfig.matchRules.league, sets: parseInt(e.target.value) } } })} />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Points</label>
+                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules.league.points} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, league: { ...localConfig.matchRules.league, points: parseInt(e.target.value) } } })} />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tie-Break</label>
+                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules.league.tieBreak} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, league: { ...localConfig.matchRules.league, tieBreak: parseInt(e.target.value) } } })} />
+                      </div>
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Sets per Match</label>
-                    <select
-                      className="w-full p-3 bg-slate-800 border border-slate-700 rounded text-white focus:border-blue-500 outline-none"
-                      value={localConfig.setsPerMatch}
-                      onChange={e => setLocalConfig({ ...localConfig, setsPerMatch: parseInt(e.target.value) })}
-                    >
-                      <option value={1}>1 Set</option>
-                      <option value={3}>3 Sets</option>
-                      <option value={5}>5 Sets</option>
-                    </select>
+                  {/* Playoff Rules */}
+                  <div className="bg-slate-900/50 p-4 rounded-lg border border-white/5">
+                    <h4 className="text-red-400 font-bold mb-4 uppercase tracking-wider text-sm">Playoff Rules (Semis/Finals)</h4>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Sets</label>
+                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules.playoff?.sets || 5} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, playoff: { ...(localConfig.matchRules.playoff || {}), sets: parseInt(e.target.value) } } })} />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Points</label>
+                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules.playoff?.points || 25} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, playoff: { ...(localConfig.matchRules.playoff || {}), points: parseInt(e.target.value) } } })} />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tie-Break</label>
+                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules.playoff?.tieBreak || 15} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, playoff: { ...(localConfig.matchRules.playoff || {}), tieBreak: parseInt(e.target.value) } } })} />
+                      </div>
+                    </div>
                   </div>
 
                   <button className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-lg hover:from-blue-500 hover:to-indigo-500 transition-all flex justify-center items-center gap-2 shadow-lg uppercase tracking-wider text-sm">
@@ -819,7 +841,6 @@ const AdminDashboard = ({
         </div>
       )}
     </div>
-    </div >
   );
 };
 
@@ -888,7 +909,9 @@ export default function App() {
       teamB: data.teamB,
       status: 'scheduled',
       setsA: 0, setsB: 0, scores: [], winner: null,
-      startTime: `${data.date}T${data.time}`
+      startTime: `${data.date}T${data.time}`,
+      stage: data.stage || 'league',
+      matchName: data.matchName || ''
     });
   };
 
@@ -924,8 +947,13 @@ export default function App() {
     };
     currentScores[currentSetIndex] = newSetScore;
 
-    const isDecidingSet = currentScores.length === config.setsPerMatch;
-    const targetPoints = isDecidingSet ? config.tieBreakerPoints : config.pointsPerSet;
+    // RULE SELECTION
+    const stageRules = (config.matchRules && config.matchRules[match.stage]) || config.matchRules?.league || { sets: 3, points: 25, tieBreak: 15 };
+    const setsToWin = Math.ceil(stageRules.sets / 2);
+
+    // Check if decider
+    const isDecidingSet = currentScores.length === stageRules.sets;
+    const targetPoints = isDecidingSet ? stageRules.tieBreak : stageRules.points;
     const diff = Math.abs(newSetScore.a - newSetScore.b);
     const hasReachedTarget = (newSetScore.a >= targetPoints || newSetScore.b >= targetPoints);
 
@@ -939,7 +967,7 @@ export default function App() {
       updates.setsA = newSetsA;
       updates.setsB = newSetsB;
 
-      const setsNeededToWin = Math.ceil(config.setsPerMatch / 2);
+      const setsNeededToWin = Math.ceil(stageRules.sets / 2);
       if (newSetsA === setsNeededToWin) {
         updates.status = 'finished';
         updates.winner = match.teamA;
@@ -948,7 +976,7 @@ export default function App() {
         updates.status = 'finished';
         updates.winner = match.teamB;
         setTimeout(() => setView('admin-dashboard'), 2000);
-      } else if (newSetsA + newSetsB < config.setsPerMatch) {
+      } else if (newSetsA + newSetsB < stageRules.sets) {
         // Only create new set if match not finished and max sets not reached
         updates.scores = [...currentScores, { a: 0, b: 0 }];
         // Auto-Alert for Set End swap
