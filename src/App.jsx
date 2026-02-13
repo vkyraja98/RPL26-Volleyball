@@ -883,46 +883,7 @@ const AdminDashboard = ({
           </div>
         </div>
       </div>
-      {/* Toss Modal */}
-      {showTossModal && activeTab && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <AdminGlassCard className="w-full max-w-md p-8">
-            <h3 className="text-2xl font-black text-white mb-6 uppercase tracking-wide">Match Protocol</h3>
-            <div className="space-y-6">
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Who won the toss?</label>
-                <div className="grid grid-cols-2 gap-4">
-                  <button onClick={() => setTossDetails({ ...tossDetails, winner: selectedMatch.teamA })} className={`p-4 rounded-xl font-bold border ${tossDetails.winner === selectedMatch.teamA ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
-                    {getTeam(teams, selectedMatch.teamA).name}
-                  </button>
-                  <button onClick={() => setTossDetails({ ...tossDetails, winner: selectedMatch.teamB })} className={`p-4 rounded-xl font-bold border ${tossDetails.winner === selectedMatch.teamB ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
-                    {getTeam(teams, selectedMatch.teamB).name}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Choice</label>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 text-white cursor-pointer">
-                    <input type="radio" name="choice" checked={tossDetails.choice === 'Serve'} onChange={() => setTossDetails({ ...tossDetails, choice: 'Serve' })} className="w-4 h-4 text-blue-600 bg-slate-800 border-slate-600 focus:ring-blue-500" />
-                    <span className="font-bold">To Serve</span>
-                  </label>
-                  <label className="flex items-center gap-2 text-white cursor-pointer">
-                    <input type="radio" name="choice" checked={tossDetails.choice === 'Court'} onChange={() => setTossDetails({ ...tossDetails, choice: 'Court' })} className="w-4 h-4 text-blue-600 bg-slate-800 border-slate-600 focus:ring-blue-500" />
-                    <span className="font-bold">Choice of Court</span>
-                  </label>
-                </div>
-              </div>
-
-              <div className="flex gap-3 mt-8">
-                <button onClick={() => setShowTossModal(false)} className="flex-1 py-3 bg-slate-700 text-white font-bold rounded-lg uppercase tracking-wider text-xs hover:bg-slate-600">Cancel</button>
-                <button onClick={confirmStartMatch} className="flex-1 py-3 bg-green-600 text-white font-bold rounded-lg uppercase tracking-wider text-xs hover:bg-green-500 shadow-lg shadow-green-600/20">Start Match</button>
-              </div>
-            </div>
-          </AdminGlassCard>
-        </div>
-      )}
+      {/* Toss Modal - REMOVED */}
     </div>
   );
 };
