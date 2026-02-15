@@ -710,7 +710,7 @@ const AdminScorer = ({ match, teams = [], config, handleScore, setView, updateDo
 // --- Admin Dashboard ---
 const AdminDashboard = ({
   teams, matches, players, config, updateConfig, setIsAdmin, setView,
-  adminTab, setAdminTab, createFixture, startMatch, deleteDoc, addDoc, updateDoc, db, appId
+  adminTab, setAdminTab, createFixture, startMatch, deleteDoc, addDoc, updateDoc, db, appId, standings
 }) => {
   const [newItem, setNewItem] = useState('');
   const [newPlayer, setNewPlayer] = useState({ name: '', teamId: '', isCaptain: false });
@@ -1752,7 +1752,7 @@ export default function App() {
           <AdminDashboard
             teams={teams} matches={matches} players={players} config={config} updateConfig={updateConfig}
             setIsAdmin={setIsAdmin} setView={setView} adminTab={adminTab} setAdminTab={setAdminTab}
-            createFixture={createFixture} startMatch={startMatch} deleteDoc={deleteDoc} addDoc={addDoc} updateDoc={updateDoc} db={db} appId={appId}
+            createFixture={createFixture} startMatch={startMatch} deleteDoc={deleteDoc} addDoc={addDoc} updateDoc={updateDoc} db={db} appId={appId} standings={standings}
           />}
       </div>
     </ErrorBoundary>
