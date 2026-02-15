@@ -149,94 +149,209 @@ const Badge = ({ status }) => {
   );
 };
 
-// --- Roadmap View ---
+// --- Roadmap View (Bracket Style) ---
 const RoadmapView = ({ teams, matches, config, standings }) => {
   const groups = config.tournamentType === 'group'
     ? [...new Set(standings.map(s => s.group || 'A'))].sort()
     : ['League'];
 
-  const getQualifiers = (groupName) => {
-    const list = config.tournamentType === 'group'
-      ? standings.filter(s => (s.group || 'A') === groupName)
-      : standings;
-    return list.slice(0, config.roadmap?.qualifiers || 2);
+  // Helper to find a match by stage or name
+  const findMatch = (stage, name) => matches.find(m => m.stage === stage && (m.matchName === name || m.matchName?.includes(name)));
+
+  // Determine if League is Finished
+  const leagueMatches = matches.filter(m => m.stage.startsWith('Group') || m.stage === 'league');
+  const isLeagueFinished = leagueMatches.length > 0 && leagueMatches.every(m => m.status === 'finished');
+
+  const getQualifierName = (group, position) => {
+    if (!isLeagueFinished) return `${group}${position}`;
+    const groupStandings = standings.filter(s => (s.group || 'A') === group).sort((a, b) => a.rank - b.rank); // Assuming standings are already sorted
+    // Re-sort just in case, though standings prop is memoized sorted
+    // Actually standings prop is global sorted, need to filter then take idx
+    const sortedGroup = standings.filter(s => (s.group || 'A') === group);
+    // The main standings logic sorts by points globally? No, it sorts the whole array.
+    // We need to pick the top N from specific group.
+    // Let's rely on the fact that we can filter and then sort by leaguePoints/ratio if needed, 
+    // but the main standings array is already sorted by criteria.
+    // So distinct filtering preserves order.
+    return sortedGroup[position - 1]?.name || 'TBD';
   };
 
-  const playoffMatches = matches.filter(m => m.stage === 'playoff' || m.stage === 'semis' || m.stage === 'final').sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+  // Semis
+  const semi1 = findMatch('semis', 'Semi Final 1') || { teamA: 'TBD', teamB: 'TBD', status: 'upcoming' };
+  const semi2 = findMatch('semis', 'Semi Final 2') || { teamA: 'TBD', teamB: 'TBD', status: 'upcoming' };
+
+  // Final
+  const finalMatch = findMatch('final', 'Final') || { teamA: 'TBD', teamB: 'TBD', status: 'upcoming' };
+
+  // Resolve Names for Display
+  const getDisplayTeam = (id, placeholder) => {
+    const team = getTeam(teams, id);
+    if (team.name !== '...') return team.name;
+    // If ID is not a valid team ID, it might be a placeholder string like 'A1' stored in match? 
+    // Actually our auto-schedule will put real IDs. 
+    // For visualization before scheduling:
+    if (!isLeagueFinished) return placeholder;
+    return 'TBD';
+  };
 
   return (
-    <div className="space-y-12 py-8 relative">
-      {/* Connecting Line (Visual) */}
-      <div className="absolute left-8 top-10 bottom-10 w-1 bg-gradient-to-b from-blue-500/50 via-purple-500/50 to-orange-500/50 hidden md:block rounded-full"></div>
+    <div className="overflow-x-auto py-10">
+      <div className="flex justify-between items-center min-w-[800px] gap-8">
 
-      {/* Stage 1: Group Phase */}
-      <div className="relative pl-0 md:pl-16">
-        <div className="absolute left-6 top-6 w-5 h-5 bg-blue-500 rounded-full border-4 border-slate-950 hidden md:block z-10"></div>
-        <h3 className="text-2xl font-black text-blue-400 uppercase tracking-widest mb-6 flex items-center gap-3">
-          <span className="md:hidden">1.</span> League Stage
-        </h3>
-        <div className="grid md:grid-cols-2 gap-6">
+        {/* ROUND 1: QUALIFIERS */}
+        <div className="flex flex-col justify-around gap-8">
           {groups.map(g => (
-            <GlassCard key={g} className="p-6 relative overflow-visible">
-              {config.tournamentType === 'group' && <div className="absolute -top-3 -right-3 bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-lg">Group {g}</div>}
-              <div className="space-y-3">
-                <h4 className="text-slate-400 text-xs font-bold uppercase tracking-widest border-b border-white/10 pb-2 mb-2">Top Qualifiers</h4>
-                {getQualifiers(g).map((team, idx) => (
-                  <div key={team.id} className="flex items-center gap-3 bg-slate-900/50 p-3 rounded border border-white/5">
-                    <div className="flex-1 flex items-center gap-3">
-                      <span className="font-mono text-slate-500 font-bold">#{idx + 1}</span>
-                      <div className={`w-6 h-6 rounded ${team.color}`} />
-                      <span className="font-bold text-white">{team.name}</span>
-                    </div>
-                    <div className="text-xs font-mono text-blue-300">
-                      {team.leaguePoints} pts
-                    </div>
-                  </div>
-                ))}
-                {getQualifiers(g).length === 0 && <div className="text-slate-500 italic text-sm">No matches played yet.</div>}
+            <GlassCard key={g} className="p-4 w-64 border-l-4 border-blue-500">
+              <h4 className="text-blue-400 font-bold uppercase tracking-widest text-xs mb-3">Group {g} Top 2</h4>
+              <div className="space-y-2">
+                <div className="bg-white/5 p-2 rounded flex justify-between items-center">
+                  <span className="font-bold text-white">1. {getQualifierName(g, 1)}</span>
+                  {isLeagueFinished && <CheckCircle2 size={14} className="text-green-500" />}
+                </div>
+                <div className="bg-white/5 p-2 rounded flex justify-between items-center">
+                  <span className="font-bold text-white">2. {getQualifierName(g, 2)}</span>
+                  {isLeagueFinished && <CheckCircle2 size={14} className="text-green-500" />}
+                </div>
               </div>
             </GlassCard>
           ))}
         </div>
-      </div>
 
-      {/* Stage 2: Playoffs */}
-      <div className="relative pl-0 md:pl-16">
-        <div className="absolute left-6 top-6 w-5 h-5 bg-purple-500 rounded-full border-4 border-slate-950 hidden md:block z-10"></div>
-        <h3 className="text-2xl font-black text-purple-400 uppercase tracking-widest mb-6 flex items-center gap-3">
-          <span className="md:hidden">2.</span> Playoffs
-        </h3>
-        <div className="grid md:grid-cols-2 gap-6">
-          {playoffMatches.length === 0 && (
-            <div className="col-span-2 p-8 border-2 border-dashed border-white/10 rounded-xl text-center text-slate-500">
-              <p className="mb-2 font-bold uppercase tracking-wider">TBD</p>
-              <p className="text-sm">Matches will appear here once scheduled.</p>
-            </div>
-          )}
-          {playoffMatches.map(m => (
-            <div key={m.id} className="relative">
-              <MatchCardPublic match={m} teams={teams} players={[]} config={config} />
-              {/* Connector Line for Flow */}
-              <div className="hidden md:block absolute -left-10 top-1/2 w-10 h-0.5 bg-white/10"></div>
-            </div>
-          ))}
+        {/* CONNECTORS */}
+        <div className="flex flex-col justify-around h-full">
+          <ChevronRight className="text-slate-600" />
+          <ChevronRight className="text-slate-600" />
         </div>
-      </div>
 
-      {/* Stage 3: Finals */}
-      <div className="relative pl-0 md:pl-16">
-        <div className="absolute left-6 top-6 w-5 h-5 bg-orange-500 rounded-full border-4 border-slate-950 hidden md:block z-10"></div>
-        <h3 className="text-2xl font-black text-orange-400 uppercase tracking-widest mb-6 flex items-center gap-3">
-          <span className="md:hidden">3.</span> Championship
-        </h3>
-        <GlassCard className="p-8 text-center border-orange-500/30 bg-gradient-to-b from-orange-500/10 to-transparent">
-          <Trophy size={48} className="mx-auto text-orange-400 mb-4 drop-shadow-[0_0_15px_rgba(249,115,22,0.5)]" />
-          <h2 className="text-3xl font-black text-white uppercase tracking-tighter mb-2">The Final</h2>
-          <p className="text-slate-400 text-sm max-w-md mx-auto">The ultimate showdown to decide the champion of {config.tournamentName}.</p>
-        </GlassCard>
+        {/* ROUND 2: SEMIS */}
+        <div className="flex flex-col justify-around gap-12">
+          {/* SF 1 */}
+          <GlassCard className={`w-72 p-0 ${semi1.status === 'live' ? 'border-red-500/50' : ''}`}>
+            <div className="bg-purple-600/20 p-2 text-center text-purple-300 text-[10px] font-bold uppercase tracking-widest">
+              Semi Final 1
+            </div>
+            <div className="p-4 space-y-2">
+              <div className={`flex justify-between ${semi1.winner === semi1.teamA ? 'text-green-400 font-bold' : 'text-white'}`}>
+                <span>{semi1.teamA ? getTeam(teams, semi1.teamA).name : (isLeagueFinished ? 'TBD' : 'A1')}</span>
+                <span>{semi1.setsA}</span>
+              </div>
+              <div className={`flex justify-between ${semi1.winner === semi1.teamB ? 'text-green-400 font-bold' : 'text-white'}`}>
+                <span>{semi1.teamB ? getTeam(teams, semi1.teamB).name : (isLeagueFinished ? 'TBD' : 'B2')}</span>
+                <span>{semi1.setsB}</span>
+              </div>
+            </div>
+          </GlassCard>
+
+          {/* SF 2 */}
+          <GlassCard className={`w-72 p-0 ${semi2.status === 'live' ? 'border-red-500/50' : ''}`}>
+            <div className="bg-purple-600/20 p-2 text-center text-purple-300 text-[10px] font-bold uppercase tracking-widest">
+              Semi Final 2
+            </div>
+            <div className="p-4 space-y-2">
+              <div className={`flex justify-between ${semi2.winner === semi2.teamA ? 'text-green-400 font-bold' : 'text-white'}`}>
+                <span>{semi2.teamA ? getTeam(teams, semi2.teamA).name : (isLeagueFinished ? 'TBD' : 'B1')}</span>
+                <span>{semi2.setsA}</span>
+              </div>
+              <div className={`flex justify-between ${semi2.winner === semi2.teamB ? 'text-green-400 font-bold' : 'text-white'}`}>
+                <span>{semi2.teamB ? getTeam(teams, semi2.teamB).name : (isLeagueFinished ? 'TBD' : 'A2')}</span>
+                <span>{semi2.setsB}</span>
+              </div>
+            </div>
+          </GlassCard>
+        </div>
+
+        {/* CONNECTORS */}
+        <div><ChevronRight className="text-slate-600" /></div>
+
+        {/* ROUND 3: FINAL */}
+        <div>
+          <GlassCard className={`w-80 p-0 border-2 ${finalMatch.status === 'finished' ? 'border-orange-500' : 'border-white/10'}`}>
+            <div className="bg-orange-500 text-slate-900 p-3 text-center text-xs font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2">
+              <Trophy size={14} /> The Final
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="text-center">
+                <div className={`text-xl font-black ${finalMatch.winner === finalMatch.teamA ? 'text-orange-400 scale-110' : 'text-white'} transition-transform`}>
+                  {finalMatch.teamA ? getTeam(teams, finalMatch.teamA).name : 'Winner SF1'}
+                </div>
+                {finalMatch.status !== 'upcoming' && <div className="text-3xl font-black text-white/20 my-1">{finalMatch.setsA} - {finalMatch.setsB}</div>}
+                <div className="text-xs text-slate-500 font-bold uppercase tracking-widest my-2">VS</div>
+                <div className={`text-xl font-black ${finalMatch.winner === finalMatch.teamB ? 'text-orange-400 scale-110' : 'text-white'} transition-transform`}>
+                  {finalMatch.teamB ? getTeam(teams, finalMatch.teamB).name : 'Winner SF2'}
+                </div>
+              </div>
+              {finalMatch.winner && (
+                <div className="mt-4 bg-orange-500/20 p-3 rounded-lg text-center animate-pulse">
+                  <span className="text-orange-400 font-black uppercase tracking-wider text-sm">Champion: {getTeam(teams, finalMatch.winner).name}</span>
+                </div>
+              )}
+            </div>
+          </GlassCard>
+        </div>
+
       </div>
     </div>
   );
+};
+
+// --- Auto-Scheduler Helper ---
+const checkAndScheduleNextStage = async (matches, teams, standings, db, appId, config) => {
+  // 1. Check League Finish -> Schedule Semis
+  const leagueMatches = matches.filter(m => m.stage.startsWith('Group') || m.stage === 'league');
+  const isLeagueFinished = leagueMatches.length > 0 && leagueMatches.every(m => m.status === 'finished');
+
+  const semisExist = matches.some(m => m.stage === 'semis');
+
+  if (isLeagueFinished && !semisExist && config.tournamentType === 'group') {
+    const groupA = standings.filter(s => s.group === 'A');
+    const groupB = standings.filter(s => s.group === 'B');
+
+    if (groupA.length >= 2 && groupB.length >= 2) {
+      // Standard: A1 vs B2, B1 vs A2
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'matches'), {
+        teamA: groupA[0].id,
+        teamB: groupB[1].id,
+        status: 'scheduled',
+        setsA: 0, setsB: 0, scores: [], winner: null,
+        startTime: new Date(Date.now() + 86400000).toISOString(), // Tomorrow
+        stage: 'semis',
+        matchName: 'Semi Final 1'
+      });
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'matches'), {
+        teamA: groupB[0].id,
+        teamB: groupA[1].id,
+        status: 'scheduled',
+        setsA: 0, setsB: 0, scores: [], winner: null,
+        startTime: new Date(Date.now() + 86400000 * 2).toISOString(), // Day after tomorrow
+        stage: 'semis',
+        matchName: 'Semi Final 2'
+      });
+      alert("League Stage Finished! Semi-Finals Automatically Scheduled.");
+    }
+  }
+
+  // 2. Check Semis Finish -> Schedule Final
+  const semiMatches = matches.filter(m => m.stage === 'semis');
+  const isSemisFinished = semiMatches.length === 2 && semiMatches.every(m => m.status === 'finished');
+  const finalExists = matches.some(m => m.stage === 'final');
+
+  if (isSemisFinished && !finalExists) {
+    const winner1 = semiMatches.find(m => m.matchName === 'Semi Final 1')?.winner;
+    const winner2 = semiMatches.find(m => m.matchName === 'Semi Final 2')?.winner;
+
+    if (winner1 && winner2) {
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'matches'), {
+        teamA: winner1,
+        teamB: winner2,
+        status: 'scheduled',
+        setsA: 0, setsB: 0, scores: [], winner: null,
+        startTime: new Date(Date.now() + 86400000 * 3).toISOString(),
+        stage: 'final',
+        matchName: 'Final'
+      });
+      alert("Semi-Finals Finished! Grand Final Automatically Scheduled.");
+    }
+  }
 };
 
 // --- Navigation ---
@@ -329,7 +444,6 @@ const MatchCardPublic = ({ match, teams, players, config, isLiveFeature = false 
   const teamB = getTeam(teams, match.teamB);
   const captainA = players.find(p => p.teamId === match.teamA && p.isCaptain);
   const captainB = players.find(p => p.teamId === match.teamB && p.isCaptain);
-  const date = new Date(match.startTime);
 
   return (
     <GlassCard className={`group hover:bg-slate-800/50 transition-colors ${isLiveFeature ? 'border-blue-500/30' : ''}`}>
@@ -363,29 +477,31 @@ const MatchCardPublic = ({ match, teams, players, config, isLiveFeature = false 
             {match.status === 'scheduled' ? (
               <div className="text-center">
                 <div className="text-4xl md:text-6xl font-black text-white/10 italic tracking-tighter">VS</div>
-                <div className="mt-4 flex flex-col items-center text-blue-400">
-                  <div className="flex items-center gap-1 mb-1">
-                    <Calendar size={14} />
-                    <span className="text-xs font-bold uppercase tracking-wider">{date.toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
-                  </div>
-                  <div className="bg-slate-900/50 px-3 py-1 rounded text-white font-mono text-sm border border-white/10">
-                    {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </div>
+                <div className="mt-2 flex flex-col items-center gap-1">
+                  {match.isTba ? (
+                    <span className="text-xs md:text-sm font-bold text-blue-400 bg-blue-400/10 px-3 py-1 rounded-full uppercase tracking-widest border border-blue-400/20">
+                      Time: TBA
+                    </span>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-1 text-blue-400 font-bold uppercase tracking-wider text-xs md:text-sm">
+                        <Calendar size={12} /> {new Date(match.startTime).toLocaleDateString()}
+                      </div>
+                      <div className="text-slate-500 font-bold uppercase tracking-wider text-[10px] md:text-xs">
+                        {new Date(match.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center">
+              <div className="text-center">
                 <div className="flex items-center gap-4 md:gap-8">
-                  <span className={`${isLiveFeature ? 'text-6xl md:text-8xl' : 'text-4xl md:text-5xl'} font-black ${match.winner === match.teamA ? 'text-green-400 drop-shadow-[0_0_15px_rgba(74,222,128,0.5)]' : 'text-white'}`}>{match.setsA}</span>
-                  <span className={`text-white/20 font-black ${isLiveFeature ? 'text-4xl md:text-6xl' : 'text-2xl'}`}>-</span>
-                  <span className={`${isLiveFeature ? 'text-6xl md:text-8xl' : 'text-4xl md:text-5xl'} font-black ${match.winner === match.teamB ? 'text-green-400 drop-shadow-[0_0_15px_rgba(74,222,128,0.5)]' : 'text-white'}`}>{match.setsB}</span>
+                  <span className={`text-4xl md:text-6xl font-black tabular-nums tracking-tighter ${match.winner === match.teamA ? 'text-white' : 'text-slate-500'}`}>{match.setsA || 0}</span>
+                  <span className="text-xl md:text-3xl font-black text-slate-700">-</span>
+                  <span className={`text-4xl md:text-6xl font-black tabular-nums tracking-tighter ${match.winner === match.teamB ? 'text-white' : 'text-slate-500'}`}>{match.setsB || 0}</span>
                 </div>
-                {match.status === 'live' && (
-                  <div className="mt-4 px-4 py-1.5 bg-red-500 text-white rounded-full text-xs font-black uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(239,68,68,0.4)] animate-pulse flex items-center gap-2">
-                    <span className="w-2 h-2 bg-white rounded-full animate-ping" />
-                    Set {match.scores.length}
-                  </div>
-                )}
+                <div className="mt-2 text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-widest">{match.status === 'live' ? 'Current Score' : 'Final Score'}</div>
               </div>
             )}
           </div>
@@ -1188,7 +1304,29 @@ export default function App() {
         updates.status = 'finished';
         updates.winner = match.teamB;
         setTimeout(() => setView('admin-dashboard'), 2000);
-      } else if (newSetsA + newSetsB < stageRules.sets) {
+      }
+      if (newSetsA > (stageRules.sets / 2) || newSetsB > (stageRules.sets / 2)) {
+        const winner = newSetsA > newSetsB ? match.teamA : match.teamB;
+        updates.status = 'finished';
+        updates.winner = winner;
+        alert(`Match Finished! Winner: ${winner === match.teamA ? 'Team A' : 'Team B'}`);
+
+        // Auto-Schedule Hook
+        // We need to wait for the update to propagate or pass the new state
+        // passing updated matches list would be ideal, but here we just trigger it.
+        // The helper needs the *latest* data. Since we are updating firestore,
+        // we can assume firestore update will trigger a re-render/re-fetch,
+        // but we want to trigger scheduling *now*.
+        // Let's pass the *anticipated* new matches state?
+        // Actually, let's just wait a tick or call it with the knowledge of this match finishing.
+        setTimeout(() => {
+          // We need to fetch latest matches or use current + update.
+          // Since we don't have easy access to "latest from DB" here without listening,
+          // we will construct a temporary matches array with this match updated.
+          const updatedMatches = matches.map(m => m.id === match.id ? { ...m, ...updates } : m);
+          checkAndScheduleNextStage(updatedMatches, teams, standings, db, appId, config);
+        }, 1000);
+      } else {
         // Only create new set if match not finished and max sets not reached
         updates.scores = [...currentScores, { a: 0, b: 0 }];
       }
