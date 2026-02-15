@@ -45,7 +45,15 @@ const db = getFirestore(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
 // --- Helpers ---
-const getTeam = (teams, id) => (Array.isArray(teams) ? teams.find(t => t.id === id) : null) || { name: '...', color: 'bg-slate-700' };
+const getTeam = (teams, id) => {
+  if (id?.startsWith('PLACEHOLDER:')) {
+    const parts = id.split(':');
+    if (parts[1] === 'SF') return { name: `Winner ${parts[2]}`, color: 'bg-slate-700' };
+    if (parts[1] === 'GRP') return { name: `${parts[2]} ${parts[3] === '1' ? 'Winner' : 'Runner-up'}`, color: 'bg-slate-700' };
+    return { name: 'TBD', color: 'bg-slate-700' };
+  }
+  return (Array.isArray(teams) ? teams.find(t => t.id === id) : null) || { name: '...', color: 'bg-slate-700' };
+};
 
 // --- Configuration ---
 // Update Config to support stage rules
@@ -286,63 +294,98 @@ const RoadmapView = ({ teams, matches, config, standings }) => {
 
 // --- Auto-Scheduler Helper ---
 const checkAndScheduleNextStage = async (matches, teams, standings, db, appId, config) => {
-  // 1. Check League Finish -> Schedule Semis
+  // --- 1. Semi-Finals Logic ---
+  const semisExist = matches.some(m => m.stage === 'semis');
+
+  // A. Create Placeholders if not exist
+  if (!semisExist && config.tournamentType === 'group') {
+    // Create placeholders immediately
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'matches'), {
+      teamA: 'PLACEHOLDER:GRP:Group A:1', // Group A Winner
+      teamB: 'PLACEHOLDER:GRP:Group B:2', // Group B Runner-up
+      status: 'scheduled',
+      setsA: 0, setsB: 0, scores: [], winner: null,
+      startTime: new Date().toISOString(),
+      isTba: true,
+      stage: 'semis',
+      matchName: 'Semi Final 1'
+    });
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'matches'), {
+      teamA: 'PLACEHOLDER:GRP:Group B:1', // Group B Winner
+      teamB: 'PLACEHOLDER:GRP:Group A:2', // Group A Runner-up
+      status: 'scheduled',
+      setsA: 0, setsB: 0, scores: [], winner: null,
+      startTime: new Date().toISOString(),
+      isTba: true,
+      stage: 'semis',
+      matchName: 'Semi Final 2'
+    });
+    alert("Semi-Finals Scheduled (Placeholders).");
+  }
+
+  // B. Resolve Placeholders (if League Finished)
   const leagueMatches = matches.filter(m => m.stage.startsWith('Group') || m.stage === 'league');
   const isLeagueFinished = leagueMatches.length > 0 && leagueMatches.every(m => m.status === 'finished');
 
-  const semisExist = matches.some(m => m.stage === 'semis');
-
-  if (isLeagueFinished && !semisExist && config.tournamentType === 'group') {
+  if (isLeagueFinished && config.tournamentType === 'group') {
     const groupA = standings.filter(s => s.group === 'A');
     const groupB = standings.filter(s => s.group === 'B');
 
-    if (groupA.length >= 2 && groupB.length >= 2) {
-      // Standard: A1 vs B2, B1 vs A2
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'matches'), {
-        teamA: groupA[0].id,
-        teamB: groupB[1].id,
-        status: 'scheduled',
-        setsA: 0, setsB: 0, scores: [], winner: null,
-        startTime: new Date().toISOString(), // Placeholder date
-        isTba: true, // Use TBA logic
-        stage: 'semis',
-        matchName: 'Semi Final 1'
-      });
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'matches'), {
-        teamA: groupB[0].id,
-        teamB: groupA[1].id,
-        status: 'scheduled',
-        setsA: 0, setsB: 0, scores: [], winner: null,
-        startTime: new Date().toISOString(), // Placeholder date
-        isTba: true, // Use TBA logic
-        stage: 'semis',
-        matchName: 'Semi Final 2'
-      });
-      alert("League Stage Finished! Semi-Finals Automatically Scheduled (TBA).");
+    // Find Semi matches with Placeholders
+    const semiMatches = matches.filter(m => m.stage === 'semis');
+    for (const match of semiMatches) {
+      let update = {};
+      if (match.teamA.startsWith('PLACEHOLDER:GRP:Group A:1') && groupA[0]) update.teamA = groupA[0].id;
+      if (match.teamA.startsWith('PLACEHOLDER:GRP:Group B:1') && groupB[0]) update.teamA = groupB[0].id;
+      if (match.teamA.startsWith('PLACEHOLDER:GRP:Group A:2') && groupA[1]) update.teamA = groupA[1].id;
+      if (match.teamA.startsWith('PLACEHOLDER:GRP:Group B:2') && groupB[1]) update.teamA = groupB[1].id;
+
+      if (match.teamB.startsWith('PLACEHOLDER:GRP:Group A:1') && groupA[0]) update.teamB = groupA[0].id;
+      if (match.teamB.startsWith('PLACEHOLDER:GRP:Group B:1') && groupB[0]) update.teamB = groupB[0].id;
+      if (match.teamB.startsWith('PLACEHOLDER:GRP:Group A:2') && groupA[1]) update.teamB = groupA[1].id;
+      if (match.teamB.startsWith('PLACEHOLDER:GRP:Group B:2') && groupB[1]) update.teamB = groupB[1].id;
+
+      if (Object.keys(update).length > 0) {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', match.id), update);
+      }
     }
   }
 
-  // 2. Check Semis Finish -> Schedule Final
-  const semiMatches = matches.filter(m => m.stage === 'semis');
-  const isSemisFinished = semiMatches.length === 2 && semiMatches.every(m => m.status === 'finished');
+  // --- 2. Finals Logic ---
   const finalExists = matches.some(m => m.stage === 'final');
 
-  if (isSemisFinished && !finalExists) {
+  // A. Create Placeholder Final if not exist
+  if (!finalExists && semisExist) { // Only create Final placeholder if Semis exist (or created)
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'matches'), {
+      teamA: 'PLACEHOLDER:SF:Semi Final 1',
+      teamB: 'PLACEHOLDER:SF:Semi Final 2',
+      status: 'scheduled',
+      setsA: 0, setsB: 0, scores: [], winner: null,
+      startTime: new Date().toISOString(),
+      isTba: true,
+      stage: 'final',
+      matchName: 'Final'
+    });
+    alert("Final Scheduled (Placeholder).");
+  }
+
+  // B. Resolve Final Placeholders (if Semis Finished)
+  const semiMatches = matches.filter(m => m.stage === 'semis');
+  const isSemisFinished = semiMatches.length === 2 && semiMatches.every(m => m.status === 'finished');
+
+  if (isSemisFinished) {
     const winner1 = semiMatches.find(m => m.matchName === 'Semi Final 1')?.winner;
     const winner2 = semiMatches.find(m => m.matchName === 'Semi Final 2')?.winner;
+    const finalMatch = matches.find(m => m.stage === 'final');
 
-    if (winner1 && winner2) {
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'matches'), {
-        teamA: winner1,
-        teamB: winner2,
-        status: 'scheduled',
-        setsA: 0, setsB: 0, scores: [], winner: null,
-        startTime: new Date().toISOString(),
-        isTba: true, // Use TBA logic
-        stage: 'final',
-        matchName: 'Final'
-      });
-      alert("Semi-Finals Finished! Grand Final Automatically Scheduled (TBA).");
+    if (winner1 && winner2 && finalMatch) {
+      let update = {};
+      if (finalMatch.teamA.startsWith('PLACEHOLDER')) update.teamA = winner1;
+      if (finalMatch.teamB.startsWith('PLACEHOLDER')) update.teamB = winner2;
+
+      if (Object.keys(update).length > 0) {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', finalMatch.id), update);
+      }
     }
   }
 };
