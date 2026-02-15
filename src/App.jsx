@@ -294,18 +294,27 @@ const RoadmapView = ({ teams, matches, config, standings }) => {
 
 // --- Auto-Scheduler Helper ---
 const checkAndScheduleNextStage = async (matches, teams, standings, db, appId, config) => {
+  console.log("Auto-Schedule Triggered", { matches, config });
+  let actionTaken = false;
+
+  if (config.tournamentType !== 'group') {
+    alert("Auto-Schedule is ensuring 'Group' tournament type rules. Current type: " + config.tournamentType);
+    return;
+  }
+
   // --- 1. Semi-Finals Logic ---
   const semisExist = matches.some(m => m.stage === 'semis');
 
   // A. Create Placeholders if not exist
   if (!semisExist && config.tournamentType === 'group') {
     // Create placeholders immediately
+    const now = new Date().toISOString();
     await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'matches'), {
       teamA: 'PLACEHOLDER:GRP:Group A:1', // Group A Winner
       teamB: 'PLACEHOLDER:GRP:Group B:2', // Group B Runner-up
       status: 'scheduled',
       setsA: 0, setsB: 0, scores: [], winner: null,
-      startTime: new Date().toISOString(),
+      startTime: now,
       isTba: true,
       stage: 'semis',
       matchName: 'Semi Final 1'
@@ -315,12 +324,13 @@ const checkAndScheduleNextStage = async (matches, teams, standings, db, appId, c
       teamB: 'PLACEHOLDER:GRP:Group A:2', // Group A Runner-up
       status: 'scheduled',
       setsA: 0, setsB: 0, scores: [], winner: null,
-      startTime: new Date().toISOString(),
+      startTime: now,
       isTba: true,
       stage: 'semis',
       matchName: 'Semi Final 2'
     });
     alert("Semi-Finals Scheduled (Placeholders).");
+    actionTaken = true;
   }
 
   // B. Resolve Placeholders (if League Finished)
@@ -333,6 +343,7 @@ const checkAndScheduleNextStage = async (matches, teams, standings, db, appId, c
 
     // Find Semi matches with Placeholders
     const semiMatches = matches.filter(m => m.stage === 'semis');
+    let updatesCount = 0;
     for (const match of semiMatches) {
       let update = {};
       if (match.teamA.startsWith('PLACEHOLDER:GRP:Group A:1') && groupA[0]) update.teamA = groupA[0].id;
@@ -347,26 +358,36 @@ const checkAndScheduleNextStage = async (matches, teams, standings, db, appId, c
 
       if (Object.keys(update).length > 0) {
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', match.id), update);
+        updatesCount++;
       }
+    }
+    if (updatesCount > 0) {
+      alert(`Updated ${updatesCount} Semi-Final matches with qualified teams.`);
+      actionTaken = true;
     }
   }
 
   // --- 2. Finals Logic ---
   const finalExists = matches.some(m => m.stage === 'final');
+  // Re-check semisExist in case we just created them
+  const currentSemisExist = matches.some(m => m.stage === 'semis') || actionTaken; // approximation
 
   // A. Create Placeholder Final if not exist
-  if (!finalExists && semisExist) { // Only create Final placeholder if Semis exist (or created)
+  // Only create Final placeholder if Semis exist
+  if (!finalExists && hasSemis(matches)) {
+    const now = new Date().toISOString();
     await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'matches'), {
       teamA: 'PLACEHOLDER:SF:Semi Final 1',
       teamB: 'PLACEHOLDER:SF:Semi Final 2',
       status: 'scheduled',
       setsA: 0, setsB: 0, scores: [], winner: null,
-      startTime: new Date().toISOString(),
+      startTime: now,
       isTba: true,
       stage: 'final',
       matchName: 'Final'
     });
     alert("Final Scheduled (Placeholder).");
+    actionTaken = true;
   }
 
   // B. Resolve Final Placeholders (if Semis Finished)
@@ -385,10 +406,19 @@ const checkAndScheduleNextStage = async (matches, teams, standings, db, appId, c
 
       if (Object.keys(update).length > 0) {
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', finalMatch.id), update);
+        alert("Final Match updated with Semi-Final winners.");
+        actionTaken = true;
       }
     }
   }
+
+  if (!actionTaken) {
+    alert("Auto-Schedule Check Complete.\n\nStatus:\n- Semis Exist: " + (hasSemis(matches) ? "Yes" : "No") + "\n- League Finished: " + (isLeagueFinished ? "Yes" : "No") + "\n- Final Exists: " + (finalExists ? "Yes" : "No"));
+  }
 };
+
+// Helper
+const hasSemis = (matches) => matches.some(m => m.stage === 'semis');
 
 // --- Navigation ---
 const Navigation = ({ config, view, setView, isAdmin }) => (
