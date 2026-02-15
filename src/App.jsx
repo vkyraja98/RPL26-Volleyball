@@ -164,34 +164,22 @@ const RoadmapView = ({ teams, matches, config, standings }) => {
 
   const getQualifierName = (group, position) => {
     if (!isLeagueFinished) return `${group}${position}`;
-    const groupStandings = standings.filter(s => (s.group || 'A') === group).sort((a, b) => a.rank - b.rank); // Assuming standings are already sorted
-    // Re-sort just in case, though standings prop is memoized sorted
-    // Actually standings prop is global sorted, need to filter then take idx
-    const sortedGroup = standings.filter(s => (s.group || 'A') === group);
-    // The main standings logic sorts by points globally? No, it sorts the whole array.
-    // We need to pick the top N from specific group.
-    // Let's rely on the fact that we can filter and then sort by leaguePoints/ratio if needed, 
-    // but the main standings array is already sorted by criteria.
-    // So distinct filtering preserves order.
+    const sortedGroup = standings.filter(s => (s.group || 'A') === group).sort((a, b) => a.rank - b.rank); // Pre-sorted in main standings, filtering preserves order
     return sortedGroup[position - 1]?.name || 'TBD';
   };
 
   // Semis
-  const semi1 = findMatch('semis', 'Semi Final 1') || { teamA: 'TBD', teamB: 'TBD', status: 'upcoming' };
-  const semi2 = findMatch('semis', 'Semi Final 2') || { teamA: 'TBD', teamB: 'TBD', status: 'upcoming' };
+  const semi1 = findMatch('semis', 'Semi Final 1');
+  const semi2 = findMatch('semis', 'Semi Final 2');
 
   // Final
-  const finalMatch = findMatch('final', 'Final') || { teamA: 'TBD', teamB: 'TBD', status: 'upcoming' };
+  const finalMatch = findMatch('final', 'Final');
 
   // Resolve Names for Display
-  const getDisplayTeam = (id, placeholder) => {
-    const team = getTeam(teams, id);
-    if (team.name !== '...') return team.name;
-    // If ID is not a valid team ID, it might be a placeholder string like 'A1' stored in match? 
-    // Actually our auto-schedule will put real IDs. 
-    // For visualization before scheduling:
-    if (!isLeagueFinished) return placeholder;
-    return 'TBD';
+  const resolveTeamName = (id, placeholder) => {
+    if (!id || id === 'TBD') return placeholder; // If ID is missing or explicit TBD
+    const team = teams.find(t => t.id === id);
+    return team ? team.name : placeholder; // If ID exists but team not found (rare), or valid team
   };
 
   return (
@@ -226,35 +214,35 @@ const RoadmapView = ({ teams, matches, config, standings }) => {
         {/* ROUND 2: SEMIS */}
         <div className="flex flex-col justify-around gap-12">
           {/* SF 1 */}
-          <GlassCard className={`w-72 p-0 ${semi1.status === 'live' ? 'border-red-500/50' : ''}`}>
+          <GlassCard className={`w-72 p-0 ${semi1?.status === 'live' ? 'border-red-500/50' : ''}`}>
             <div className="bg-purple-600/20 p-2 text-center text-purple-300 text-[10px] font-bold uppercase tracking-widest">
               Semi Final 1
             </div>
             <div className="p-4 space-y-2">
-              <div className={`flex justify-between ${semi1.winner === semi1.teamA ? 'text-green-400 font-bold' : 'text-white'}`}>
-                <span>{semi1.teamA ? getTeam(teams, semi1.teamA).name : (isLeagueFinished ? 'TBD' : 'A1')}</span>
-                <span>{semi1.setsA}</span>
+              <div className={`flex justify-between ${semi1?.winner === semi1?.teamA && semi1?.teamA ? 'text-green-400 font-bold' : 'text-white'}`}>
+                <span>{resolveTeamName(semi1?.teamA, 'A1')}</span>
+                <span>{semi1?.setsA || 0}</span>
               </div>
-              <div className={`flex justify-between ${semi1.winner === semi1.teamB ? 'text-green-400 font-bold' : 'text-white'}`}>
-                <span>{semi1.teamB ? getTeam(teams, semi1.teamB).name : (isLeagueFinished ? 'TBD' : 'B2')}</span>
-                <span>{semi1.setsB}</span>
+              <div className={`flex justify-between ${semi1?.winner === semi1?.teamB && semi1?.teamB ? 'text-green-400 font-bold' : 'text-white'}`}>
+                <span>{resolveTeamName(semi1?.teamB, 'B2')}</span>
+                <span>{semi1?.setsB || 0}</span>
               </div>
             </div>
           </GlassCard>
 
           {/* SF 2 */}
-          <GlassCard className={`w-72 p-0 ${semi2.status === 'live' ? 'border-red-500/50' : ''}`}>
+          <GlassCard className={`w-72 p-0 ${semi2?.status === 'live' ? 'border-red-500/50' : ''}`}>
             <div className="bg-purple-600/20 p-2 text-center text-purple-300 text-[10px] font-bold uppercase tracking-widest">
               Semi Final 2
             </div>
             <div className="p-4 space-y-2">
-              <div className={`flex justify-between ${semi2.winner === semi2.teamA ? 'text-green-400 font-bold' : 'text-white'}`}>
-                <span>{semi2.teamA ? getTeam(teams, semi2.teamA).name : (isLeagueFinished ? 'TBD' : 'B1')}</span>
-                <span>{semi2.setsA}</span>
+              <div className={`flex justify-between ${semi2?.winner === semi2?.teamA && semi2?.teamA ? 'text-green-400 font-bold' : 'text-white'}`}>
+                <span>{resolveTeamName(semi2?.teamA, 'B1')}</span>
+                <span>{semi2?.setsA || 0}</span>
               </div>
-              <div className={`flex justify-between ${semi2.winner === semi2.teamB ? 'text-green-400 font-bold' : 'text-white'}`}>
-                <span>{semi2.teamB ? getTeam(teams, semi2.teamB).name : (isLeagueFinished ? 'TBD' : 'A2')}</span>
-                <span>{semi2.setsB}</span>
+              <div className={`flex justify-between ${semi2?.winner === semi2?.teamB && semi2?.teamB ? 'text-green-400 font-bold' : 'text-white'}`}>
+                <span>{resolveTeamName(semi2?.teamB, 'A2')}</span>
+                <span>{semi2?.setsB || 0}</span>
               </div>
             </div>
           </GlassCard>
@@ -265,24 +253,24 @@ const RoadmapView = ({ teams, matches, config, standings }) => {
 
         {/* ROUND 3: FINAL */}
         <div>
-          <GlassCard className={`w-80 p-0 border-2 ${finalMatch.status === 'finished' ? 'border-orange-500' : 'border-white/10'}`}>
+          <GlassCard className={`w-80 p-0 border-2 ${finalMatch?.status === 'finished' ? 'border-orange-500' : 'border-white/10'}`}>
             <div className="bg-orange-500 text-slate-900 p-3 text-center text-xs font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2">
               <Trophy size={14} /> The Final
             </div>
             <div className="p-6 space-y-4">
               <div className="text-center">
-                <div className={`text-xl font-black ${finalMatch.winner === finalMatch.teamA ? 'text-orange-400 scale-110' : 'text-white'} transition-transform`}>
-                  {finalMatch.teamA ? getTeam(teams, finalMatch.teamA).name : 'Winner SF1'}
+                <div className={`text-xl font-black ${finalMatch?.winner === finalMatch?.teamA && finalMatch?.teamA ? 'text-orange-400 scale-110' : 'text-white'} transition-transform`}>
+                  {resolveTeamName(finalMatch?.teamA, 'Winner SF1')}
                 </div>
-                {finalMatch.status !== 'upcoming' && <div className="text-3xl font-black text-white/20 my-1">{finalMatch.setsA} - {finalMatch.setsB}</div>}
+                {finalMatch?.status && finalMatch.status !== 'upcoming' && <div className="text-3xl font-black text-white/20 my-1">{finalMatch.setsA || 0} - {finalMatch.setsB || 0}</div>}
                 <div className="text-xs text-slate-500 font-bold uppercase tracking-widest my-2">VS</div>
-                <div className={`text-xl font-black ${finalMatch.winner === finalMatch.teamB ? 'text-orange-400 scale-110' : 'text-white'} transition-transform`}>
-                  {finalMatch.teamB ? getTeam(teams, finalMatch.teamB).name : 'Winner SF2'}
+                <div className={`text-xl font-black ${finalMatch?.winner === finalMatch?.teamB && finalMatch?.teamB ? 'text-orange-400 scale-110' : 'text-white'} transition-transform`}>
+                  {resolveTeamName(finalMatch?.teamB, 'Winner SF2')}
                 </div>
               </div>
-              {finalMatch.winner && (
+              {finalMatch?.winner && (
                 <div className="mt-4 bg-orange-500/20 p-3 rounded-lg text-center animate-pulse">
-                  <span className="text-orange-400 font-black uppercase tracking-wider text-sm">Champion: {getTeam(teams, finalMatch.winner).name}</span>
+                  <span className="text-orange-400 font-black uppercase tracking-wider text-sm">Champion: {resolveTeamName(finalMatch?.winner, 'TBD')}</span>
                 </div>
               )}
             </div>
@@ -313,7 +301,8 @@ const checkAndScheduleNextStage = async (matches, teams, standings, db, appId, c
         teamB: groupB[1].id,
         status: 'scheduled',
         setsA: 0, setsB: 0, scores: [], winner: null,
-        startTime: new Date(Date.now() + 86400000).toISOString(), // Tomorrow
+        startTime: new Date().toISOString(), // Placeholder date
+        isTba: true, // Use TBA logic
         stage: 'semis',
         matchName: 'Semi Final 1'
       });
@@ -322,11 +311,12 @@ const checkAndScheduleNextStage = async (matches, teams, standings, db, appId, c
         teamB: groupA[1].id,
         status: 'scheduled',
         setsA: 0, setsB: 0, scores: [], winner: null,
-        startTime: new Date(Date.now() + 86400000 * 2).toISOString(), // Day after tomorrow
+        startTime: new Date().toISOString(), // Placeholder date
+        isTba: true, // Use TBA logic
         stage: 'semis',
         matchName: 'Semi Final 2'
       });
-      alert("League Stage Finished! Semi-Finals Automatically Scheduled.");
+      alert("League Stage Finished! Semi-Finals Automatically Scheduled (TBA).");
     }
   }
 
@@ -345,11 +335,12 @@ const checkAndScheduleNextStage = async (matches, teams, standings, db, appId, c
         teamB: winner2,
         status: 'scheduled',
         setsA: 0, setsB: 0, scores: [], winner: null,
-        startTime: new Date(Date.now() + 86400000 * 3).toISOString(),
+        startTime: new Date().toISOString(),
+        isTba: true, // Use TBA logic
         stage: 'final',
         matchName: 'Final'
       });
-      alert("Semi-Finals Finished! Grand Final Automatically Scheduled.");
+      alert("Semi-Finals Finished! Grand Final Automatically Scheduled (TBA).");
     }
   }
 };
@@ -818,6 +809,7 @@ const AdminDashboard = ({
                         </select>
                       )}
                       {!fixture.id && <button onClick={generateFixtures} className="text-xs bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded font-bold uppercase tracking-wider">Auto-Generate Fixtures</button>}
+                      {!fixture.id && <button onClick={() => checkAndScheduleNextStage(matches, teams, standings, db, appId, config)} className="text-xs bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded font-bold uppercase tracking-wider">Check Auto-Schedule</button>}
                       {fixture.id && <button onClick={() => setFixture({ ta: '', tb: '', d: '', t: '', stage: 'league' })} className="text-xs bg-slate-600 hover:bg-slate-500 text-white px-3 py-2 rounded font-bold uppercase tracking-wider">Cancel Edit</button>}
                     </div>
                   </div>
