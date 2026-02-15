@@ -14,6 +14,8 @@ import {
   getAuth, signInAnonymously, onAuthStateChanged,
   signInWithCustomToken
 } from 'firebase/auth';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 /**
  * VOLLEYBALL TOURNAMENT MANAGER (Pro Edition)
@@ -444,7 +446,10 @@ const MatchCardPublic = ({ match, teams, players, config, isLiveFeature = false 
           <Trophy size={12} className="text-blue-400" />
           <span className="text-blue-200/50 text-[10px] font-black uppercase tracking-[0.2em]">{config.tournamentName}</span>
         </div>
-        <Badge status={match.status} />
+        <div className="flex items-center gap-2">
+          {match.stage && <span className="text-[10px] uppercase font-bold text-slate-400 bg-white/5 px-2 py-0.5 rounded">{match.stage.replace('Group', 'GRP')}</span>}
+          <Badge status={match.status} />
+        </div>
       </div>
 
       {/* Content */}
@@ -1472,10 +1477,42 @@ export default function App() {
             </div>
           </div>
 
-          {/* Print Button */}
+          {/* Print Button Replacement */}
           <div className="flex justify-end mb-4 no-print">
-            <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold uppercase tracking-wider text-xs border border-white/10 transition-colors">
-              <span className="text-lg">🖨️</span> Print Report
+            <button onClick={() => {
+              const doc = new jsPDF();
+
+              // Header
+              doc.setFontSize(22);
+              doc.setTextColor(40, 40, 40);
+              doc.text(config.tournamentName || 'Tournament Schedule', 14, 20);
+              doc.setFontSize(10);
+              doc.setTextColor(100, 100, 100);
+              doc.text(`Generated on ${new Date().toLocaleDateString()}`, 14, 28);
+
+              // Data Preparation
+              const allMatches = matches.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+              const tableBody = allMatches.map(m => ([
+                new Date(m.startTime).toLocaleDateString(),
+                m.isTba ? 'TBA' : new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                m.stage || '-',
+                `${getTeam(teams, m.teamA).name} vs ${getTeam(teams, m.teamB).name}`,
+                m.status === 'finished' ? `${m.setsA}-${m.setsB}` : m.status
+              ]));
+
+              autoTable(doc, {
+                startY: 35,
+                head: [['Date', 'Time', 'Group/Stage', 'Match', 'Result/Status']],
+                body: tableBody,
+                theme: 'grid',
+                headStyles: { fillColor: [66, 133, 244], textColor: 255, fontStyle: 'bold' },
+                alternateRowStyles: { fillColor: [245, 247, 250] },
+                styles: { fontSize: 9, cellPadding: 3 }
+              });
+
+              doc.save('tournament-schedule.pdf');
+            }} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold uppercase tracking-wider text-xs border border-white/10 transition-colors">
+              <span className="text-lg">📄</span> Download Schedule
             </button>
           </div>
 
