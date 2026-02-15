@@ -57,7 +57,22 @@ const DEFAULT_CONFIG = {
     league: { sets: 3, points: 25, tieBreak: 15 },
     semis: { sets: 5, points: 25, tieBreak: 15 },
     final: { sets: 5, points: 25, tieBreak: 15 }
+  },
+  roadmap: {
+    qualifiers: 2, // Number of teams qualifying from each group
+    playoffType: 'semis' // 'semis' (A1 vs B2, B1 vs A2) or 'ipl' (Page Playoff)
   }
+};
+
+// --- Helpers ---
+const shuffleArray = (array) => {
+  let currentIndex = array.length, randomIndex;
+  while (currentIndex > 0) {
+    randomIndex = Math.floor(Math.random() * currentIndex);
+    currentIndex--;
+    [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+  }
+  return array;
 };
 
 // --- Components ---
@@ -131,6 +146,96 @@ const Badge = ({ status }) => {
     <span className={`px-3 py-1 text-[10px] font-black tracking-wider uppercase rounded border ${styles[status] || styles.scheduled}`}>
       {status === 'live' ? 'LIVE' : status === 'finished' ? 'FT' : 'UPCOMING'}
     </span>
+  );
+};
+
+// --- Roadmap View ---
+const RoadmapView = ({ teams, matches, config, standings }) => {
+  const groups = config.tournamentType === 'group'
+    ? [...new Set(standings.map(s => s.group || 'A'))].sort()
+    : ['League'];
+
+  const getQualifiers = (groupName) => {
+    const list = config.tournamentType === 'group'
+      ? standings.filter(s => (s.group || 'A') === groupName)
+      : standings;
+    return list.slice(0, config.roadmap?.qualifiers || 2);
+  };
+
+  const playoffMatches = matches.filter(m => m.stage === 'playoff' || m.stage === 'semis' || m.stage === 'final').sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+
+  return (
+    <div className="space-y-12 py-8 relative">
+      {/* Connecting Line (Visual) */}
+      <div className="absolute left-8 top-10 bottom-10 w-1 bg-gradient-to-b from-blue-500/50 via-purple-500/50 to-orange-500/50 hidden md:block rounded-full"></div>
+
+      {/* Stage 1: Group Phase */}
+      <div className="relative pl-0 md:pl-16">
+        <div className="absolute left-6 top-6 w-5 h-5 bg-blue-500 rounded-full border-4 border-slate-950 hidden md:block z-10"></div>
+        <h3 className="text-2xl font-black text-blue-400 uppercase tracking-widest mb-6 flex items-center gap-3">
+          <span className="md:hidden">1.</span> League Stage
+        </h3>
+        <div className="grid md:grid-cols-2 gap-6">
+          {groups.map(g => (
+            <GlassCard key={g} className="p-6 relative overflow-visible">
+              {config.tournamentType === 'group' && <div className="absolute -top-3 -right-3 bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-lg">Group {g}</div>}
+              <div className="space-y-3">
+                <h4 className="text-slate-400 text-xs font-bold uppercase tracking-widest border-b border-white/10 pb-2 mb-2">Top Qualifiers</h4>
+                {getQualifiers(g).map((team, idx) => (
+                  <div key={team.id} className="flex items-center gap-3 bg-slate-900/50 p-3 rounded border border-white/5">
+                    <div className="flex-1 flex items-center gap-3">
+                      <span className="font-mono text-slate-500 font-bold">#{idx + 1}</span>
+                      <div className={`w-6 h-6 rounded ${team.color}`} />
+                      <span className="font-bold text-white">{team.name}</span>
+                    </div>
+                    <div className="text-xs font-mono text-blue-300">
+                      {team.leaguePoints} pts
+                    </div>
+                  </div>
+                ))}
+                {getQualifiers(g).length === 0 && <div className="text-slate-500 italic text-sm">No matches played yet.</div>}
+              </div>
+            </GlassCard>
+          ))}
+        </div>
+      </div>
+
+      {/* Stage 2: Playoffs */}
+      <div className="relative pl-0 md:pl-16">
+        <div className="absolute left-6 top-6 w-5 h-5 bg-purple-500 rounded-full border-4 border-slate-950 hidden md:block z-10"></div>
+        <h3 className="text-2xl font-black text-purple-400 uppercase tracking-widest mb-6 flex items-center gap-3">
+          <span className="md:hidden">2.</span> Playoffs
+        </h3>
+        <div className="grid md:grid-cols-2 gap-6">
+          {playoffMatches.length === 0 && (
+            <div className="col-span-2 p-8 border-2 border-dashed border-white/10 rounded-xl text-center text-slate-500">
+              <p className="mb-2 font-bold uppercase tracking-wider">TBD</p>
+              <p className="text-sm">Matches will appear here once scheduled.</p>
+            </div>
+          )}
+          {playoffMatches.map(m => (
+            <div key={m.id} className="relative">
+              <MatchCardPublic match={m} teams={teams} players={[]} config={config} />
+              {/* Connector Line for Flow */}
+              <div className="hidden md:block absolute -left-10 top-1/2 w-10 h-0.5 bg-white/10"></div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Stage 3: Finals */}
+      <div className="relative pl-0 md:pl-16">
+        <div className="absolute left-6 top-6 w-5 h-5 bg-orange-500 rounded-full border-4 border-slate-950 hidden md:block z-10"></div>
+        <h3 className="text-2xl font-black text-orange-400 uppercase tracking-widest mb-6 flex items-center gap-3">
+          <span className="md:hidden">3.</span> Championship
+        </h3>
+        <GlassCard className="p-8 text-center border-orange-500/30 bg-gradient-to-b from-orange-500/10 to-transparent">
+          <Trophy size={48} className="mx-auto text-orange-400 mb-4 drop-shadow-[0_0_15px_rgba(249,115,22,0.5)]" />
+          <h2 className="text-3xl font-black text-white uppercase tracking-tighter mb-2">The Final</h2>
+          <p className="text-slate-400 text-sm max-w-md mx-auto">The ultimate showdown to decide the champion of {config.tournamentName}.</p>
+        </GlassCard>
+      </div>
+    </div>
   );
 };
 
@@ -505,13 +610,15 @@ const AdminDashboard = ({
       generated.forEach(g => createFixture(g));
       alert(`Generated ${generated.length} matches!`);
     } else if (config.tournamentType === 'group') {
-      const groups = Array.from({ length: numGroups }, () => []);
-      teams.forEach((team, idx) => {
-        groups[idx % numGroups].push(team.id);
+      const groups = {};
+      teams.forEach(team => {
+        const g = team.group || 'A'; // Default to A if not set
+        if (!groups[g]) groups[g] = [];
+        groups[g].push(team.id);
       });
 
       let generated = 0;
-      groups.forEach((groupTeams, gIdx) => {
+      Object.entries(groups).forEach(([groupName, groupTeams]) => {
         for (let i = 0; i < groupTeams.length; i++) {
           for (let j = i + 1; j < groupTeams.length; j++) {
             createFixture({
@@ -519,13 +626,14 @@ const AdminDashboard = ({
               teamB: groupTeams[j],
               date: new Date().toISOString().split('T')[0],
               time: '18:00',
-              stage: `Group ${String.fromCharCode(65 + gIdx)}`
+              stage: `Group ${groupName}`,
+              matchName: `Group ${groupName} Match`
             });
             generated++;
           }
         }
       });
-      alert(`Generated ${generated} matches across ${numGroups} groups!`);
+      alert(`Generated ${generated} matches across ${Object.keys(groups).length} groups!`);
     } else {
       alert("Only Round Robin & Group generation supported.");
     }
@@ -695,32 +803,79 @@ const AdminDashboard = ({
             {adminTab === 'teams' && (
               <>
                 <AdminGlassCard className="p-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold text-lg text-white">Manage Teams</h3>
+                    <div className="flex gap-2">
+                      {config.tournamentType === 'group' && (
+                        <button
+                          onClick={() => {
+                            if (!confirm("This will shuffle all teams into groups randomly. Continue?")) return;
+                            const shuffled = shuffleArray([...teams]);
+                            const groups = Array.from({ length: numGroups }, (_, i) => String.fromCharCode(65 + i)); // ['A', 'B', ...]
+                            shuffled.forEach((team, idx) => {
+                              const group = groups[idx % numGroups];
+                              updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teams', team.id), { group });
+                            });
+                            alert("Teams assigned to groups randomly!");
+                          }}
+                          className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded font-bold uppercase tracking-wider text-xs"
+                        >
+                          Random Group Gen
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
                   <form onSubmit={(e) => {
                     e.preventDefault();
                     if (newItem) {
                       const colors = ['bg-red-500', 'bg-blue-500', 'bg-emerald-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500', 'bg-indigo-500', 'bg-cyan-500'];
-                      addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'teams'), { name: newItem, color: colors[Math.floor(Math.random() * colors.length)] });
+                      addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'teams'), {
+                        name: newItem,
+                        color: colors[Math.floor(Math.random() * colors.length)],
+                        group: 'A'
+                      });
                       setNewItem('');
                     }
-                  }} className="flex gap-3">
+                  }} className="flex gap-3 mb-6">
                     <input className="flex-1 p-3 bg-slate-800 border border-slate-700 rounded text-white focus:border-blue-500 outline-none" placeholder="Enter Team Name" value={newItem} onChange={e => setNewItem(e.target.value)} />
                     <button className="px-6 bg-blue-600 text-white font-bold rounded hover:bg-blue-500 uppercase tracking-wider text-sm">Add Team</button>
                   </form>
-                </AdminGlassCard>
-                <div className="grid gap-3">
-                  {teams.map(t => (
-                    <AdminGlassCard key={t.id} className="p-4 flex justify-between items-center group">
-                      <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-lg ${t.color} shadow-lg`} />
-                        <div>
-                          <span className="font-bold text-white text-lg block">{t.name}</span>
-                          <span className="text-xs text-slate-400 uppercase tracking-wider">Squad Size: {players.filter(p => p.teamId === t.id).length}</span>
+
+                  <div className="grid gap-3">
+                    {teams.map(t => (
+                      <AdminGlassCard key={t.id} className="p-4 flex justify-between items-center group">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-10 h-10 rounded-lg ${t.color} shadow-lg`} />
+                          <div>
+                            <span className="font-bold text-white text-lg block">{t.name}</span>
+                            <div className="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-wider">
+                              <span>Squad: {players.filter(p => p.teamId === t.id).length}</span>
+                              {config.tournamentType === 'group' && (
+                                <>
+                                  <span className="text-slate-600">|</span>
+                                  <div className="flex items-center gap-1">
+                                    <span>Group:</span>
+                                    <select
+                                      value={t.group || 'A'}
+                                      onChange={(e) => updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teams', t.id), { group: e.target.value })}
+                                      className="bg-slate-800 text-blue-300 font-bold border-none rounded p-1 cursor-pointer outline-none hover:bg-slate-700"
+                                    >
+                                      {Array.from({ length: 4 }, (_, i) => String.fromCharCode(65 + i)).map(g => (
+                                        <option key={g} value={g}>{g}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                      <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teams', t.id))} className="text-slate-600 hover:text-red-400 transition-colors"><Trash2 size={18} /></button>
-                    </AdminGlassCard>
-                  ))}
-                </div>
+                        <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teams', t.id))} className="text-slate-600 hover:text-red-400 transition-colors"><Trash2 size={18} /></button>
+                      </AdminGlassCard>
+                    ))}
+                  </div>
+                </AdminGlassCard>
               </>
             )}
 
@@ -870,6 +1025,24 @@ const AdminDashboard = ({
                       <div>
                         <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tie-Break</label>
                         <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules?.playoff?.tieBreak || 15} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, playoff: { ...(localConfig.matchRules?.playoff || {}), tieBreak: parseInt(e.target.value) } } })} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Roadmap Configuration */}
+                  <div className="bg-slate-900/50 p-4 rounded-lg border border-white/5">
+                    <h4 className="text-purple-400 font-bold mb-4 uppercase tracking-wider text-sm">Roadmap Configuration</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Qualifiers per Group</label>
+                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.roadmap?.qualifiers || 2} onChange={e => setLocalConfig({ ...localConfig, roadmap: { ...localConfig.roadmap, qualifiers: parseInt(e.target.value) } })} />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Playoff Format</label>
+                        <select className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.roadmap?.playoffType || 'semis'} onChange={e => setLocalConfig({ ...localConfig, roadmap: { ...localConfig.roadmap, playoffType: e.target.value } })}>
+                          <option value="semis">Standard Semis (A1 vs B2, B1 vs A2)</option>
+                          <option value="ipl">Page Playoff (Qualifier 1, Eliminator, Qualifier 2)</option>
+                        </select>
                       </div>
                     </div>
                   </div>
@@ -1152,7 +1325,8 @@ export default function App() {
               {[
                 { id: 'standings', label: 'Standings', icon: TrendingUp },
                 { id: 'fixtures', label: 'Matches', icon: Calendar },
-                { id: 'results', label: 'Results', icon: CheckCircle2 }
+                { id: 'results', label: 'Results', icon: CheckCircle2 },
+                { id: 'roadmap', label: 'Roadmap', icon: Activity } // Using Activity as placeholder for Network/Map
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -1177,6 +1351,8 @@ export default function App() {
 
           {/* Content */}
           <div className="min-h-[400px]">
+            {activeTab === 'roadmap' && <RoadmapView teams={teams} matches={matches} config={config} standings={standings} />}
+
             {activeTab === 'fixtures' && (
               <div className="grid md:grid-cols-2 gap-6">
                 {upcomingMatches.length === 0 && <div className="col-span-2 text-center text-slate-500 py-12 italic">No upcoming matches scheduled</div>}
@@ -1192,104 +1368,132 @@ export default function App() {
             )}
 
             {activeTab === 'standings' && (
-              <GlassCard className="p-0 overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-white/5 text-slate-400 text-xs font-bold uppercase tracking-widest border-b border-white/10">
-                      <th className="p-5">Rank</th>
-                      <th className="p-5">Team</th>
-                      <th className="p-5 text-center">Played</th>
-                      <th className="p-5 text-center">W-L</th>
-                      <th className="p-5 text-center hidden sm:table-cell">Set Ratio</th>
-                      <th className="p-5 text-center hidden sm:table-cell">Point Ratio</th>
-                      <th className="p-5 text-center hidden sm:table-cell">Squad Size</th>
-                      <th className="p-5 text-center bg-white/5 text-blue-300">PTS</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {standings.length === 0 && <tr><td colSpan="8" className="p-8 text-center text-slate-500 italic">No teams registered</td></tr>}
-                    {standings.map((team, idx) => (
-                      <React.Fragment key={team.id}>
-                        <tr onClick={() => setExpandedTeamId(expandedTeamId === team.id ? null : team.id)} className="hover:bg-white/5 transition-colors group cursor-pointer">
-                          <td className="p-5 font-mono text-slate-500 font-bold w-16">{idx + 1}</td>
-                          <td className="p-5">
-                            <div className="flex items-center gap-4">
-                              <div className={`w-10 h-10 rounded-lg ${team.color} flex items-center justify-center font-black text-white shadow-lg`}>
-                                {team.name[0]}
-                              </div>
-                              <span className="font-bold text-lg text-white group-hover:text-blue-300 transition-colors">{team.name}</span>
-                            </div>
-                          </td>
-                          <td className="p-5 text-center font-mono text-slate-300">{team.played}</td>
-                          <td className="p-5 text-center font-mono">
-                            <span className="text-green-400 font-bold">{team.won}</span>
-                            <span className="text-slate-600 mx-1">/</span>
-                            <span className="text-red-400 font-bold">{team.lost}</span>
-                          </td>
-                          <td className="p-5 text-center font-mono text-sm hidden sm:table-cell text-slate-400">
-                            {team.setRatio.toFixed(3)}
-                          </td>
-                          <td className="p-5 text-center font-mono text-sm hidden sm:table-cell text-slate-400">
-                            {team.pointRatio.toFixed(3)}
-                          </td>
-                          <td className="p-5 text-center font-mono text-sm hidden sm:table-cell text-slate-400">
-                            {team.squadSize}
-                          </td>
-                          <td className="p-5 text-center bg-white/5">
-                            <span className="text-2xl font-black text-blue-400">{team.leaguePoints}</span>
-                          </td>
-                        </tr>
-                        {/* Expanded Details */}
-                        {expandedTeamId === team.id && (
-                          <tr className="bg-slate-900/50 animate-fade-in text-sm">
-                            <td colSpan="8" className="p-6 border-b border-white/5">
-                              <div className="grid md:grid-cols-2 gap-8">
-                                <div>
-                                  <h4 className="text-slate-400 font-bold uppercase tracking-wider mb-3 text-xs">Recent Results</h4>
-                                  <div className="space-y-2">
-                                    {matches.filter(m => (m.teamA === team.id || m.teamB === team.id) && m.status === 'finished').length === 0 && <p className="text-slate-600 italic">No finished matches.</p>}
-                                    {matches.filter(m => (m.teamA === team.id || m.teamB === team.id) && m.status === 'finished').map(m => {
-                                      const isA = m.teamA === team.id;
-                                      const opp = isA ? m.teamB : m.teamA;
-                                      const win = m.winner === team.id;
-                                      return (
-                                        <div key={m.id} className="flex justify-between items-center p-2 bg-slate-950 rounded border border-white/5">
-                                          <span className="text-slate-300">vs <strong className="text-white">{getTeam(teams, opp).name}</strong></span>
-                                          <span className={`font-mono font-bold ${win ? 'text-green-400' : 'text-red-400'}`}>
-                                            {isA ? m.setsA : m.setsB}-{isA ? m.setsB : m.setsA}
-                                          </span>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                                <div>
-                                  <h4 className="text-slate-400 font-bold uppercase tracking-wider mb-3 text-xs">Upcoming Schedule</h4>
-                                  <div className="space-y-2">
-                                    {matches.filter(m => (m.teamA === team.id || m.teamB === team.id) && m.status === 'scheduled').length === 0 && <p className="text-slate-600 italic">No upcoming matches.</p>}
-                                    {matches.filter(m => (m.teamA === team.id || m.teamB === team.id) && m.status === 'scheduled').map(m => {
-                                      const isA = m.teamA === team.id;
-                                      const opp = isA ? m.teamB : m.teamA;
-                                      return (
-                                        <div key={m.id} className="flex justify-between items-center p-2 bg-slate-950 rounded border border-white/5">
-                                          <span className="text-slate-300">vs <strong className="text-white">{getTeam(teams, opp).name}</strong></span>
-                                          <span className="text-xs text-blue-400 font-bold">
-                                            {new Date(m.startTime).toLocaleDateString()} {new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                          </span>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
+              <div className="space-y-8">
+                {(() => {
+                  const groups = config.tournamentType === 'group'
+                    ? [...new Set(standings.map(s => s.group || 'A'))].sort()
+                    : ['ALL'];
+
+                  return groups.map(groupName => {
+                    const groupStandings = config.tournamentType === 'group'
+                      ? standings.filter(s => (s.group || 'A') === groupName)
+                      : standings;
+
+                    return (
+                      <GlassCard key={groupName} className="p-0 overflow-x-auto">
+                        {config.tournamentType === 'group' && (
+                          <div className="p-4 bg-white/5 border-b border-white/10">
+                            <h3 className="text-xl font-black text-white uppercase tracking-widest">Group {groupName}</h3>
+                          </div>
                         )}
-                      </React.Fragment>
-                    ))}
-                  </tbody>
-                </table>
-              </GlassCard>
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-white/5 text-slate-400 text-xs font-bold uppercase tracking-widest border-b border-white/10">
+                              <th className="p-5">Rank</th>
+                              <th className="p-5">Team</th>
+                              <th className="p-5 text-center">Played</th>
+                              <th className="p-5 text-center">W-L</th>
+                              <th className="p-5 text-center hidden sm:table-cell">Set Ratio</th>
+                              <th className="p-5 text-center hidden sm:table-cell">Point Ratio</th>
+                              <th className="p-5 text-center hidden sm:table-cell">Squad Size</th>
+                              <th className="p-5 text-center bg-white/5 text-blue-300">PTS</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5">
+                            {groupStandings.length === 0 && <tr><td colSpan="8" className="p-8 text-center text-slate-500 italic">No teams registered</td></tr>}
+                            {groupStandings.map((team, idx) => {
+                              const isQualified = config.tournamentType === 'group' && idx < (config.roadmap?.qualifiers || 2);
+                              return (
+                                <React.Fragment key={team.id}>
+                                  <tr onClick={() => setExpandedTeamId(expandedTeamId === team.id ? null : team.id)} className={`hover:bg-white/5 transition-colors group cursor-pointer ${isQualified ? 'bg-green-500/5' : ''}`}>
+                                    <td className="p-5 font-mono text-slate-500 font-bold w-16">{idx + 1}</td>
+                                    <td className="p-5">
+                                      <div className="flex items-center gap-4">
+                                        <div className={`w-10 h-10 rounded-lg ${team.color} flex items-center justify-center font-black text-white shadow-lg relative`}>
+                                          {team.name[0]}
+                                          {isQualified && <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-slate-900" title="Qualified" />}
+                                        </div>
+                                        <div>
+                                          <span className="font-bold text-lg text-white group-hover:text-blue-300 transition-colors">{team.name}</span>
+                                          {isQualified && <span className="ml-2 text-[10px] font-black bg-green-500 text-slate-900 px-1.5 py-0.5 rounded uppercase tracking-wider">Q</span>}
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="p-5 text-center font-mono text-slate-300">{team.played}</td>
+                                    <td className="p-5 text-center font-mono">
+                                      <span className="text-green-400 font-bold">{team.won}</span>
+                                      <span className="text-slate-600 mx-1">/</span>
+                                      <span className="text-red-400 font-bold">{team.lost}</span>
+                                    </td>
+                                    <td className="p-5 text-center font-mono text-sm hidden sm:table-cell text-slate-400">
+                                      {team.setRatio.toFixed(3)}
+                                    </td>
+                                    <td className="p-5 text-center font-mono text-sm hidden sm:table-cell text-slate-400">
+                                      {team.pointRatio.toFixed(3)}
+                                    </td>
+                                    <td className="p-5 text-center font-mono text-sm hidden sm:table-cell text-slate-400">
+                                      {team.squadSize}
+                                    </td>
+                                    <td className="p-5 text-center bg-white/5">
+                                      <span className="text-2xl font-black text-blue-400">{team.leaguePoints}</span>
+                                    </td>
+                                  </tr>
+                                  {/* Expanded Details */}
+                                  {expandedTeamId === team.id && (
+                                    <tr className="bg-slate-900/50 animate-fade-in text-sm">
+                                      <td colSpan="8" className="p-6 border-b border-white/5">
+                                        <div className="grid md:grid-cols-2 gap-8">
+                                          <div>
+                                            <h4 className="text-slate-400 font-bold uppercase tracking-wider mb-3 text-xs">Recent Results</h4>
+                                            <div className="space-y-2">
+                                              {matches.filter(m => (m.teamA === team.id || m.teamB === team.id) && m.status === 'finished').length === 0 && <p className="text-slate-600 italic">No finished matches.</p>}
+                                              {matches.filter(m => (m.teamA === team.id || m.teamB === team.id) && m.status === 'finished').map(m => {
+                                                const isA = m.teamA === team.id;
+                                                const opp = isA ? m.teamB : m.teamA;
+                                                const win = m.winner === team.id;
+                                                return (
+                                                  <div key={m.id} className="flex justify-between items-center p-2 bg-slate-950 rounded border border-white/5">
+                                                    <span className="text-slate-300">vs <strong className="text-white">{getTeam(teams, opp).name}</strong></span>
+                                                    <span className={`font-mono font-bold ${win ? 'text-green-400' : 'text-red-400'}`}>
+                                                      {isA ? m.setsA : m.setsB}-{isA ? m.setsB : m.setsA}
+                                                    </span>
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                          </div>
+                                          <div>
+                                            <h4 className="text-slate-400 font-bold uppercase tracking-wider mb-3 text-xs">Upcoming Schedule</h4>
+                                            <div className="space-y-2">
+                                              {matches.filter(m => (m.teamA === team.id || m.teamB === team.id) && m.status === 'scheduled').length === 0 && <p className="text-slate-600 italic">No upcoming matches.</p>}
+                                              {matches.filter(m => (m.teamA === team.id || m.teamB === team.id) && m.status === 'scheduled').map(m => {
+                                                const isA = m.teamA === team.id;
+                                                const opp = isA ? m.teamB : m.teamA;
+                                                return (
+                                                  <div key={m.id} className="flex justify-between items-center p-2 bg-slate-950 rounded border border-white/5">
+                                                    <span className="text-slate-300">vs <strong className="text-white">{getTeam(teams, opp).name}</strong></span>
+                                                    <span className="text-xs text-blue-400 font-bold">
+                                                      {new Date(m.startTime).toLocaleDateString()} {new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    </span>
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  )}
+                                </React.Fragment>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </GlassCard>
+                    );
+                  });
+                })()}
+              </div>
             )}
           </div>
         </div>
