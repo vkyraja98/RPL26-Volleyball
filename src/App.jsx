@@ -1545,7 +1545,6 @@ export default function App() {
                                         </div>
                                         <div>
                                           <span className="font-bold text-lg text-white group-hover:text-blue-300 transition-colors">{team.name}</span>
-                                          {isQualified && <span className="ml-2 text-[10px] font-black bg-green-500 text-slate-900 px-1.5 py-0.5 rounded uppercase tracking-wider">Q</span>}
                                         </div>
                                       </div>
                                     </td>
