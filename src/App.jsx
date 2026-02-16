@@ -70,7 +70,11 @@ const DEFAULT_CONFIG = {
   },
   roadmap: {
     qualifiers: 2, // Number of teams qualifying from each group
-    playoffType: 'semis' // 'semis' (A1 vs B2, B1 vs A2) or 'ipl' (Page Playoff)
+    playoffType: 'semis', // 'semis' (A1 vs B2, B1 vs A2) or 'ipl' (Page Playoff) or 'eliminator' (WPL)
+    currentStage: 'group', // 'group', 'super_league', 'playoff'
+    superStageName: 'Super Six',
+    superStageTeams: [], // IDs of teams in Super Stage
+    qualificationCount: 4 // Number of teams qualifying from Super Stage to Playoffs
   }
 };
 
@@ -194,98 +198,80 @@ const RoadmapView = ({ teams, matches, config, standings }) => {
 
   return (
     <div className="overflow-x-auto py-10">
-      <div className="flex justify-between items-center min-w-[800px] gap-8">
+      <div className="flex justify-between items-center min-w-[1000px] gap-8">
 
-        {/* ROUND 1: QUALIFIERS */}
-        <div className="flex flex-col justify-around gap-8">
+        {/* STAGE 1: GROUPS / LEAGUE */}
+        <div className="flex flex-col gap-4">
           {groups.map(g => (
-            <GlassCard key={g} className="p-4 w-64 border-l-4 border-blue-500">
-              <h4 className="text-blue-400 font-bold uppercase tracking-widest text-xs mb-3">Group {g} Top 2</h4>
-              <div className="space-y-2">
-                <div className="bg-white/5 p-2 rounded flex justify-between items-center">
-                  <span className="font-bold text-white">1. {getQualifierName(g, 1)}</span>
-                  {isLeagueFinished && <CheckCircle2 size={14} className="text-green-500" />}
-                </div>
-                <div className="bg-white/5 p-2 rounded flex justify-between items-center">
-                  <span className="font-bold text-white">2. {getQualifierName(g, 2)}</span>
-                  {isLeagueFinished && <CheckCircle2 size={14} className="text-green-500" />}
-                </div>
+            <GlassCard key={g} className="p-4 w-56 border-l-4 border-blue-500">
+              <h4 className="text-blue-400 font-bold uppercase tracking-widest text-xs mb-3">Group {g} Results</h4>
+              <div className="space-y-1">
+                {standings.all.filter(s => (s.group || 'A') === g).slice(0, config.roadmap?.qualifiers || 2).map((s, i) => (
+                  <div key={s.id} className="text-xs flex justify-between text-slate-300">
+                    <span>{i + 1}. {s.name}</span>
+                    <span>{s.leaguePoints}pts</span>
+                  </div>
+                ))}
               </div>
             </GlassCard>
           ))}
         </div>
 
-        {/* CONNECTORS */}
-        <div className="flex flex-col justify-around h-full">
-          <ChevronRight className="text-slate-600" />
-          <ChevronRight className="text-slate-600" />
+        <ChevronRight className="text-slate-600" />
+
+        {/* STAGE 2: SUPER STAGE (Conditional) */}
+        {(config.roadmap?.currentStage === 'super_league' || config.roadmap?.currentStage === 'playoff' || (config.roadmap?.superStageTeams?.length > 0)) && (
+          <>
+            <GlassCard className="p-4 w-64 border-l-4 border-purple-500">
+              <h4 className="text-purple-400 font-bold uppercase tracking-widest text-xs mb-3">{config.roadmap?.superStageName || 'Super Stage'}</h4>
+              <div className="space-y-1">
+                {standings.superStage.map((s, i) => (
+                  <div key={s.id} className={`text-xs flex justify-between ${i < (config.roadmap?.qualificationCount || 4) ? 'text-green-300 font-bold' : 'text-slate-400'}`}>
+                    <span>{i + 1}. {s.name}</span>
+                    <span>{s.leaguePoints}</span>
+                  </div>
+                ))}
+              </div>
+            </GlassCard>
+            <ChevronRight className="text-slate-600" />
+          </>
+        )}
+
+        {/* STAGE 3: PLAYOFFS */}
+        <div className="flex flex-col justify-around gap-8">
+          {/* Dynamic Rendering based on Format */}
+          {config.roadmap?.playoffType === 'eliminator' ? (
+            <div className="flex flex-col gap-8">
+              <GlassCard className="w-64 p-3 border-l-4 border-yellow-500">
+                <div className="text-[10px] text-yellow-500 uppercase font-bold">Eliminator (2nd vs 3rd)</div>
+                {(() => {
+                  const elim = findMatch('playoff', 'Eliminator');
+                  return elim ? (
+                    <div className="text-sm mt-2">
+                      <div className={elim.winner === elim.teamA ? 'text-green-400' : 'text-white'}>{resolveTeamName(elim.teamA, 'Rank 2')} vs</div>
+                      <div className={elim.winner === elim.teamB ? 'text-green-400' : 'text-white'}>{resolveTeamName(elim.teamB, 'Rank 3')}</div>
+                    </div>
+                  ) : <div className="text-xs text-slate-500 mt-2">Scheduled after Super Stage</div>;
+                })()}
+              </GlassCard>
+            </div>
+          ) : (
+            <>
+              {/* Standard Semis */}
+              <GlassCard className="w-56 p-2"><div className="text-xs text-center">Semi Final 1</div></GlassCard>
+              <GlassCard className="w-56 p-2"><div className="text-xs text-center">Semi Final 2</div></GlassCard>
+            </>
+          )}
         </div>
 
-        {/* ROUND 2: SEMIS */}
-        <div className="flex flex-col justify-around gap-12">
-          {/* SF 1 */}
-          <GlassCard className={`w-72 p-0 ${semi1?.status === 'live' ? 'border-red-500/50' : ''}`}>
-            <div className="bg-purple-600/20 p-2 text-center text-purple-300 text-[10px] font-bold uppercase tracking-widest">
-              Semi Final 1
-            </div>
-            <div className="p-4 space-y-2">
-              <div className={`flex justify-between ${semi1?.winner === semi1?.teamA && semi1?.teamA ? 'text-green-400 font-bold' : 'text-white'}`}>
-                <span>{resolveTeamName(semi1?.teamA, 'A1')}</span>
-                <span>{semi1?.setsA || 0}</span>
-              </div>
-              <div className={`flex justify-between ${semi1?.winner === semi1?.teamB && semi1?.teamB ? 'text-green-400 font-bold' : 'text-white'}`}>
-                <span>{resolveTeamName(semi1?.teamB, 'B2')}</span>
-                <span>{semi1?.setsB || 0}</span>
-              </div>
-            </div>
-          </GlassCard>
+        <ChevronRight className="text-slate-600" />
 
-          {/* SF 2 */}
-          <GlassCard className={`w-72 p-0 ${semi2?.status === 'live' ? 'border-red-500/50' : ''}`}>
-            <div className="bg-purple-600/20 p-2 text-center text-purple-300 text-[10px] font-bold uppercase tracking-widest">
-              Semi Final 2
-            </div>
-            <div className="p-4 space-y-2">
-              <div className={`flex justify-between ${semi2?.winner === semi2?.teamA && semi2?.teamA ? 'text-green-400 font-bold' : 'text-white'}`}>
-                <span>{resolveTeamName(semi2?.teamA, 'B1')}</span>
-                <span>{semi2?.setsA || 0}</span>
-              </div>
-              <div className={`flex justify-between ${semi2?.winner === semi2?.teamB && semi2?.teamB ? 'text-green-400 font-bold' : 'text-white'}`}>
-                <span>{resolveTeamName(semi2?.teamB, 'A2')}</span>
-                <span>{semi2?.setsB || 0}</span>
-              </div>
-            </div>
-          </GlassCard>
-        </div>
-
-        {/* CONNECTORS */}
-        <div><ChevronRight className="text-slate-600" /></div>
-
-        {/* ROUND 3: FINAL */}
-        <div>
-          <GlassCard className={`w-80 p-0 border-2 ${finalMatch?.status === 'finished' ? 'border-orange-500' : 'border-white/10'}`}>
-            <div className="bg-orange-500 text-slate-900 p-3 text-center text-xs font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2">
-              <Trophy size={14} /> The Final
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="text-center">
-                <div className={`text-xl font-black ${finalMatch?.winner === finalMatch?.teamA && finalMatch?.teamA ? 'text-orange-400 scale-110' : 'text-white'} transition-transform`}>
-                  {resolveTeamName(finalMatch?.teamA, 'Winner SF1')}
-                </div>
-                {finalMatch?.status && finalMatch.status !== 'upcoming' && <div className="text-3xl font-black text-white/20 my-1">{finalMatch.setsA || 0} - {finalMatch.setsB || 0}</div>}
-                <div className="text-xs text-slate-500 font-bold uppercase tracking-widest my-2">VS</div>
-                <div className={`text-xl font-black ${finalMatch?.winner === finalMatch?.teamB && finalMatch?.teamB ? 'text-orange-400 scale-110' : 'text-white'} transition-transform`}>
-                  {resolveTeamName(finalMatch?.teamB, 'Winner SF2')}
-                </div>
-              </div>
-              {finalMatch?.winner && (
-                <div className="mt-4 bg-orange-500/20 p-3 rounded-lg text-center animate-pulse">
-                  <span className="text-orange-400 font-black uppercase tracking-wider text-sm">Champion: {resolveTeamName(finalMatch?.winner, 'TBD')}</span>
-                </div>
-              )}
-            </div>
-          </GlassCard>
-        </div>
+        {/* FINAL */}
+        <GlassCard className="w-64 p-6 border-2 border-orange-500 tx-center">
+          <Trophy className="mx-auto text-orange-500 mb-2" />
+          <div className="text-center font-black text-xl text-white">CHAMPION</div>
+          <div className="text-center text-orange-400 text-sm mt-2">{finalMatch?.winner ? resolveTeamName(finalMatch.winner) : '???'}</div>
+        </GlassCard>
 
       </div>
     </div>
@@ -297,9 +283,9 @@ const checkAndScheduleNextStage = async (matches, teams, standings, db, appId, c
   console.log("Auto-Schedule Triggered", { matches, config });
   let actionTaken = false;
 
-  if (config.tournamentType !== 'group') {
-    alert("Auto-Schedule is ensuring 'Group' tournament type rules. Current type: " + config.tournamentType);
-    return;
+  if (config.tournamentType !== 'group' && config.roadmap?.currentStage === 'group') {
+    // If not group type, standard logic applies (Round Robin -> Playoff)
+    // But if we are in Super Stage, we handle it differently.
   }
 
   // --- 1. Semi-Finals Logic ---
@@ -926,6 +912,7 @@ const AdminDashboard = ({
                       <select className="p-3 rounded bg-slate-800 border border-slate-700 text-white focus:border-blue-500 outline-none" value={fixture.stage} onChange={e => setFixture({ ...fixture, stage: e.target.value })}>
                         <option value="league">League Rule Set</option>
                         <option value="playoff">Playoff Rule Set</option>
+                        <option value="super_league">Super Stage Rule Set</option>
                       </select>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
@@ -1220,15 +1207,67 @@ const AdminDashboard = ({
                     <h4 className="text-purple-400 font-bold mb-4 uppercase tracking-wider text-sm">Roadmap Configuration</h4>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Qualifiers per Group</label>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Qualifiers per Group (to Super Stage)</label>
                         <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.roadmap?.qualifiers || 2} onChange={e => setLocalConfig({ ...localConfig, roadmap: { ...localConfig.roadmap, qualifiers: parseInt(e.target.value) } })} />
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Playoff Format</label>
                         <select className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.roadmap?.playoffType || 'semis'} onChange={e => setLocalConfig({ ...localConfig, roadmap: { ...localConfig.roadmap, playoffType: e.target.value } })}>
                           <option value="semis">Standard Semis (A1 vs B2, B1 vs A2)</option>
+                          <option value="eliminator">WPL / Eliminator (1->Final, 2vs3->Final)</option>
                           <option value="ipl">Page Playoff (Qualifier 1, Eliminator, Qualifier 2)</option>
                         </select>
+                      </div>
+                      <div className="col-span-2">
+                        <div className="bg-slate-800/50 p-4 rounded mt-2">
+                          <h5 className="font-bold text-white text-xs uppercase mb-2">Stage Progression Control</h5>
+                          <div className="flex gap-4 items-center">
+                            <div className="flex-1">
+                              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Name of Super Stage</label>
+                              <input className="w-full p-2 bg-slate-800 rounded text-white text-xs" value={localConfig.roadmap?.superStageName || 'Super Six'} onChange={e => setLocalConfig({ ...localConfig, roadmap: { ...localConfig.roadmap, superStageName: e.target.value } })} />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                // Transition Logic
+                                if (config.roadmap?.currentStage === 'playoff') { alert("Already in Playoff Stage"); return; }
+
+                                // Select Teams for Super Stage
+                                const qualCount = config.roadmap?.qualifiers || 2;
+                                // Quick hack: Get top N from each group in standings
+                                const groups = ['A', 'B']; // Assume 2 groups for now
+                                let qualifiedIds = [];
+                                groups.forEach(g => {
+                                  const groupTeams = standings.all.filter(s => (s.group || 'A') === g);
+                                  qualifiedIds.push(...groupTeams.slice(0, qualCount).map(t => t.id));
+                                });
+
+                                if (confirm(`Promote ${qualifiedIds.length} teams to ${localConfig.roadmap?.superStageName}?`)) {
+                                  updateConfig({
+                                    ...config,
+                                    roadmap: {
+                                      ...config.roadmap,
+                                      currentStage: 'super_league',
+                                      superStageTeams: qualifiedIds,
+                                      superStageName: localConfig.roadmap?.superStageName
+                                    }
+                                  });
+                                  alert("Stage Updated to Super League!");
+                                }
+                              }}
+                              className="px-4 py-2 bg-purple-600 text-white rounded font-bold text-xs uppercase tracking-wider hover:bg-purple-500"
+                            >
+                              Start Super Stage
+                            </button>
+                            <button
+                              type="button"
+                              onClick={generatePlayoffs}
+                              className="px-4 py-2 bg-yellow-600 text-white rounded font-bold text-xs uppercase tracking-wider hover:bg-yellow-500"
+                            >
+                              Generate Playoffs ({localConfig.roadmap?.playoffType})
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1406,58 +1445,87 @@ export default function App() {
 
   // --- Standings Calculation ---
   const standings = useMemo(() => {
-    const stats = teams.map(team => {
-      const teamMatches = matches.filter(m => (m.teamA === team.id || m.teamB === team.id) && m.status === 'finished');
+    // Determine which teams/matches to consider based on view context or stage
+    // For general standings, valid logic is:
+    // 1. Group Stage: All matches.
+    // 2. Super Stage: Only matches between Qualified Teams (carry forward group results if applicable).
 
-      let played = 0, won = 0, lost = 0;
-      let setsWon = 0, setsLost = 0;
-      let pointsWon = 0, pointsLost = 0;
-      let leaguePoints = 0;
+    // We calculate "Global" stats first, but we need stage-specific tables.
+    // Let's create a helper to calculate stats for a specific set of teams and matches.
 
-      teamMatches.forEach(m => {
-        played++;
-        const isTeamA = m.teamA === team.id;
+    const calculateStats = (teamsList, matchesList) => {
+      return teamsList.map(team => {
+        // Filter matches: Must involve this team AND opponent must be in the teamsList (for Super Stage isolation)
+        const relevantMatches = matchesList.filter(m => {
+          const isInvolved = (m.teamA === team.id || m.teamB === team.id);
+          if (!isInvolved) return false;
+          if (m.status !== 'finished') return false;
 
-        // Match Result
-        if (m.winner === team.id) {
-          won++;
-          leaguePoints += 2;
-        } else {
-          lost++;
-        }
-
-        // Sets
-        setsWon += isTeamA ? m.setsA : m.setsB;
-        setsLost += isTeamA ? m.setsB : m.setsA;
-
-        // Points (Iterate through all set scores)
-        m.scores.forEach(s => {
-          pointsWon += isTeamA ? s.a : s.b;
-          pointsLost += isTeamA ? s.b : s.a;
+          // Strict filtering for Super Stage: Opponent must also be in the list
+          const opponentId = m.teamA === team.id ? m.teamB : m.teamA;
+          const opponentInList = teamsList.some(t => t.id === opponentId);
+          return opponentInList;
         });
+
+        let played = 0, won = 0, lost = 0;
+        let setsWon = 0, setsLost = 0;
+        let pointsWon = 0, pointsLost = 0;
+        let leaguePoints = 0;
+
+        relevantMatches.forEach(m => {
+          played++;
+          const isTeamA = m.teamA === team.id;
+
+          // Match Result
+          if (m.winner === team.id) {
+            won++;
+            leaguePoints += 2;
+          } else {
+            lost++;
+          }
+
+          // Sets
+          setsWon += isTeamA ? m.setsA : m.setsB;
+          setsLost += isTeamA ? m.setsB : m.setsA;
+
+          // Points
+          if (m.scores) {
+            m.scores.forEach(s => {
+              pointsWon += isTeamA ? s.a : s.b;
+              pointsLost += isTeamA ? s.b : s.a;
+            });
+          }
+        });
+
+        const setRatio = setsLost === 0 ? setsWon : setsWon / setsLost;
+        const pointRatio = pointsLost === 0 ? pointsWon : pointsWon / pointsLost;
+
+        return {
+          ...team,
+          played, won, lost,
+          setsWon, setsLost, setRatio,
+          pointsWon, pointsLost, pointRatio,
+          leaguePoints,
+          squadSize: players.filter(p => p.teamId === team.id).length
+        };
+      }).sort((a, b) => {
+        if (b.leaguePoints !== a.leaguePoints) return b.leaguePoints - a.leaguePoints;
+        if (b.setRatio !== a.setRatio) return b.setRatio - a.setRatio;
+        return b.pointRatio - a.pointRatio;
       });
+    };
 
-      // Ratios (Avoid division by zero)
-      const setRatio = setsLost === 0 ? setsWon : setsWon / setsLost;
-      const pointRatio = pointsLost === 0 ? pointsWon : pointsWon / pointsLost;
+    // 1. Global/Group Standings (All Teams, All Matches)
+    // Actually for Group stage, we want all matches.
+    // For Super Stage, we only want matches between Super Teams.
 
-      return {
-        ...team,
-        played, won, lost,
-        setsWon, setsLost, setRatio,
-        pointsWon, pointsLost, pointRatio,
-        leaguePoints,
-        squadSize: players.filter(p => p.teamId === team.id).length
-      };
-    });
-
-    // Sort Order: League Points -> Set Ratio -> Point Ratio
-    return stats.sort((a, b) => {
-      if (b.leaguePoints !== a.leaguePoints) return b.leaguePoints - a.leaguePoints;
-      if (b.setRatio !== a.setRatio) return b.setRatio - a.setRatio;
-      return b.pointRatio - a.pointRatio;
-    });
-  }, [teams, matches]);
+    return {
+      all: calculateStats(teams, matches),
+      superStage: config.roadmap?.superStageTeams?.length > 0
+        ? calculateStats(teams.filter(t => config.roadmap.superStageTeams.includes(t.id)), matches)
+        : []
+    };
+  }, [teams, matches, config.roadmap, players]);
 
 
   // --- Sub-Components ---
@@ -1616,8 +1684,8 @@ export default function App() {
 
                   return groups.map(groupName => {
                     const groupStandings = config.tournamentType === 'group'
-                      ? standings.filter(s => (s.group || 'A') === groupName)
-                      : standings;
+                      ? standings.all.filter(s => (s.group || 'A') === groupName)
+                      : standings.all;
 
                     return (
                       <GlassCard key={groupName} className="p-0 overflow-x-auto">
@@ -1731,7 +1799,49 @@ export default function App() {
                       </GlassCard>
                     );
                   });
+                });
                 })()}
+
+                {/* SUPER STAGE TABLE API */}
+                {config.roadmap?.currentStage !== 'group' && standings.superStage?.length > 0 && (
+                  <GlassCard className="p-0 overflow-x-auto border-t-4 border-purple-500">
+                    <div className="p-4 bg-white/5 border-b border-white/10 flex justify-between items-center">
+                      <h3 className="text-xl font-black text-white uppercase tracking-widest">{config.roadmap?.superStageName || 'Super Stage'}</h3>
+                      <span className="text-xs text-purple-300 font-bold uppercase tracking-wider">Top {config.roadmap?.qualificationCount || 4} Qualify</span>
+                    </div>
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-white/5 text-slate-400 text-xs font-bold uppercase tracking-widest border-b border-white/10">
+                          <th className="p-5">Rank</th>
+                          <th className="p-5">Team</th>
+                          <th className="p-5 text-center">P</th>
+                          <th className="p-5 text-center">W/L</th>
+                          <th className="p-5 text-center">NRR/Ratio</th>
+                          <th className="p-5 text-center text-blue-300">PTS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {standings.superStage.map((team, idx) => {
+                          const isQualified = idx < (config.roadmap?.qualificationCount || 4);
+                          return (
+                            <tr key={team.id} className={`border-b border-white/5 ${isQualified ? 'bg-green-500/5' : ''}`}>
+                              <td className="p-5 font-mono text-slate-400">{idx + 1}</td>
+                              <td className="p-5 font-bold text-white flex items-center gap-2">
+                                <div className={`w-3 h-3 rounded-full ${team.color}`} /> {team.name}
+                                {isQualified && <CheckCircle2 size={12} className="text-green-500" />}
+                              </td>
+                              <td className="p-5 text-center text-slate-400">{team.played}</td>
+                              <td className="p-5 text-center text-slate-300">{team.won}/{team.lost}</td>
+                              <td className="p-5 text-center text-slate-500 text-xs">{team.setRatio.toFixed(2)}</td>
+                              <td className="p-5 text-center font-black text-blue-400">{team.leaguePoints}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </GlassCard>
+                )}
+
               </div>
             )}
           </div>
