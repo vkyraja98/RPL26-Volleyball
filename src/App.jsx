@@ -46,13 +46,15 @@ const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
 // --- Helpers ---
 const getTeam = (teams, id) => {
-  if (id?.startsWith('PLACEHOLDER:')) {
+  if (!id) return { name: '...', color: 'bg-slate-700' };
+  if (id.startsWith('PLACEHOLDER:')) {
     const parts = id.split(':');
     if (parts[1] === 'SF') return { name: `Winner ${parts[2]}`, color: 'bg-slate-700' };
     if (parts[1] === 'GRP') return { name: `${parts[2]} ${parts[3] === '1' ? 'Winner' : 'Runner-up'}`, color: 'bg-slate-700' };
     return { name: 'TBD', color: 'bg-slate-700' };
   }
-  return (Array.isArray(teams) ? teams.find(t => t.id === id) : null) || { name: '...', color: 'bg-slate-700' };
+  // Fallback to ID itself if it looks like a placeholder name (e.g. "A1", "Rank 1")
+  return (Array.isArray(teams) ? teams.find(t => t.id === id) : null) || { name: id, color: 'bg-slate-700' };
 };
 
 // --- Configuration ---
@@ -1010,7 +1012,7 @@ const AdminDashboard = ({
                 stageId: stage.id,
                 matchName: `${stage.name} Match`,
                 isPlaceholder: true,
-                status: 'scheduled'
+                status: 'draft' // CHANGED: Default to draft for intermediate leagues so admin can choose
               });
             }
           }
@@ -1140,6 +1142,30 @@ const AdminDashboard = ({
             {/* FIXTURES TAB */}
             {adminTab === 'fixtures' && (
               <>
+                {/* DRAFT FIXTURES SECTION */}
+                {matches.some(m => m.status === 'draft') && (
+                  <div className="mb-8">
+                    <h3 className="font-bold text-lg text-yellow-400 mb-4 uppercase tracking-wider">Draft / Potential Matches</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {matches.filter(m => m.status === 'draft').map(m => (
+                        <AdminGlassCard key={m.id} className="p-4 border-l-4 border-yellow-500/50 flex justify-between items-center group">
+                          <div>
+                            <div className="font-bold text-slate-200 text-sm">{getTeam(teams, m.teamA).name} vs {getTeam(teams, m.teamB).name}</div>
+                            <div className="text-[10px] text-slate-500 uppercase mt-1">{m.stage} | {m.matchName}</div>
+                          </div>
+                          <button
+                            onClick={() => updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', m.id), { status: 'scheduled' })}
+                            className="bg-green-600 hover:bg-green-500 text-white p-2 rounded-full transition-colors"
+                            title="Add to Schedule"
+                          >
+                            <Plus size={16} />
+                          </button>
+                        </AdminGlassCard>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <AdminGlassCard className="p-6">
                   <div className="flex justify-between items-center mb-6">
                     <h3 className="font-bold text-lg text-white">{fixture.id ? 'Edit Match' : 'Schedule New Match'}</h3>
@@ -1205,7 +1231,7 @@ const AdminDashboard = ({
                 </AdminGlassCard>
 
                 <div className="space-y-3">
-                  {matches.sort((a, b) => new Date(a.startTime) - new Date(b.startTime)).map(m => (
+                  {matches.filter(m => m.status !== 'draft').sort((a, b) => new Date(a.startTime) - new Date(b.startTime)).map(m => (
                     <AdminGlassCard key={m.id} className="p-4 flex justify-between items-center group hover:bg-slate-800/80 transition-colors">
                       <div>
                         <div className="font-bold text-white text-lg">{getTeam(teams, m.teamA).name} vs {getTeam(teams, m.teamB).name}</div>
