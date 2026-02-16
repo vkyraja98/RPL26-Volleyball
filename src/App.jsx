@@ -2286,10 +2286,10 @@ export default function App() {
                                       <span className="text-red-400 font-bold">{team.lost}</span>
                                     </td>
                                     <td className="p-5 text-center font-mono text-sm hidden sm:table-cell text-slate-400">
-                                      {team.setRatio.toFixed(3)}
+                                      {typeof team.setRatio === 'string' ? team.setRatio : team.setRatio.toFixed(3)}
                                     </td>
                                     <td className="p-5 text-center font-mono text-sm hidden sm:table-cell text-slate-400">
-                                      {team.pointRatio.toFixed(3)}
+                                      {typeof team.pointRatio === 'string' ? team.pointRatio : team.pointRatio.toFixed(3)}
                                     </td>
                                     <td className="p-5 text-center font-mono text-sm hidden sm:table-cell text-slate-400">
                                       {team.squadSize}
