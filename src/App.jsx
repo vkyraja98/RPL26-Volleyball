@@ -1162,8 +1162,8 @@ const AdminDashboard = ({
     }
     else if (stage.type === 'league') {
       const table = standings[stage.id] || standings.superStage || [];
-      // Use configured qualifiers or default to 4 (or 3 if user requested)
-      const qualifiers = (nextStage?.type === 'knockout' ? (config.roadmap?.qualificationCount || 4) : (stage.settings.qualifiersFromPrev || 4));
+      // STRICT: Use stage settings first, then config global, then default
+      const qualifiers = stage.settings.qualifiersFromPrev || (nextStage?.type === 'knockout' ? 4 : 4);
 
       const top = table.slice(0, qualifiers);
       qualifiedTeams.push(...top.map((t, i) => ({
@@ -1816,8 +1816,19 @@ export default function App() {
     currentScores[currentSetIndex] = newSetScore;
 
     // RULE SELECTION
+    // 1. Try finding stage by ID
     const stage = config.stages?.find(s => s.id === match.stageId);
-    const stageRules = stage?.settings?.matchRules || (config?.matchRules && config.matchRules[match.stage]) || config?.matchRules?.league || { sets: 3, points: 25, tieBreak: 15 };
+    // 2. Try finding stage by Name (fallback)
+    const stageByName = config.stages?.find(s => s.name === match.stage);
+
+    // 3. Determine Rules
+    const stageRules =
+      stage?.settings?.matchRules ||
+      stageByName?.settings?.matchRules ||
+      (config?.matchRules && config.matchRules[match.stage]) ||
+      config?.matchRules?.league ||
+      { sets: 3, points: 25, tieBreak: 15 };
+
     const setsToWin = Math.ceil(stageRules.sets / 2);
 
     // Check if decider
@@ -1864,9 +1875,11 @@ export default function App() {
         dependentMatches.forEach(dm => {
           let dmUpdate = {};
           // WPL Eliminator Logic
-          if (match.matchName === 'Eliminator' && dm.matchName === 'Final') {
-            if (dm.teamA === 'PLACEHOLDER:ELIM:Winner') dmUpdate.teamA = matchWinner;
-            if (dm.teamB === 'PLACEHOLDER:ELIM:Winner') dmUpdate.teamB = matchWinner;
+          // We look for the Final match. It might be named "Final" or have stage="final"
+          if (match.matchName === 'Eliminator' && (dm.matchName === 'Final' || dm.stage === 'final')) {
+            // Update EITHER side if it's a placeholder or TBD
+            if (dm.teamA.includes('PLACEHOLDER') || dm.teamA === 'TBD' || dm.teamA.includes('Winner')) dmUpdate.teamA = matchWinner;
+            else if (dm.teamB.includes('PLACEHOLDER') || dm.teamB === 'TBD' || dm.teamB.includes('Winner')) dmUpdate.teamB = matchWinner;
           }
           // Standard Semis Logic
           if (match.matchName === 'Semi Final 1') {
@@ -2359,7 +2372,9 @@ export default function App() {
                   <GlassCard className="p-0 overflow-x-auto border-t-4 border-purple-500">
                     <div className="p-4 bg-white/5 border-b border-white/10 flex justify-between items-center">
                       <h3 className="text-xl font-black text-white uppercase tracking-widest">{config.roadmap?.superStageName || 'Super Stage'}</h3>
-                      <span className="text-xs text-purple-300 font-bold uppercase tracking-wider">Top {config.roadmap?.qualificationCount || 4} Qualify</span>
+                      <span className="text-xs text-purple-300 font-bold uppercase tracking-wider">
+                        Top {config.stages.find(s => s.type === 'league')?.settings?.qualifiersFromPrev || 4} Qualify
+                      </span>
                     </div>
                     <table className="w-full text-left border-collapse">
                       <thead>
@@ -2374,7 +2389,10 @@ export default function App() {
                       </thead>
                       <tbody>
                         {standings.superStage.map((team, idx) => {
-                          const isQualified = idx < (config.roadmap?.qualificationCount || 4);
+                          // Dynamic Qualification Count from Stage Settings
+                          const superStage = config.stages.find(s => s.type === 'league');
+                          const qualifyCount = superStage?.settings?.qualifiersFromPrev || config.roadmap?.qualificationCount || 4;
+                          const isQualified = idx < qualifyCount;
                           return (
                             <tr key={team.id} className={`border-b border-white/5 ${isQualified ? 'bg-green-500/5' : ''}`}>
                               <td className="p-5 font-mono text-slate-400">{idx + 1}</td>
