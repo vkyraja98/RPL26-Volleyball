@@ -62,20 +62,21 @@ const DEFAULT_CONFIG = {
   setsPerMatch: 3,
   tieBreakerPoints: 15,
   tournamentName: 'PRO VOLLEY LEAGUE 2024',
-  tournamentType: 'round-robin',
+  tournamentType: 'dynamic', // Changed to dynamic
   matchRules: {
     league: { sets: 3, points: 25, tieBreak: 15 },
     semis: { sets: 5, points: 25, tieBreak: 15 },
     final: { sets: 5, points: 25, tieBreak: 15 }
   },
-  roadmap: {
-    qualifiers: 2, // Number of teams qualifying from each group
-    playoffType: 'semis', // 'semis' (A1 vs B2, B1 vs A2) or 'ipl' (Page Playoff) or 'eliminator' (WPL)
-    currentStage: 'group', // 'group', 'super_league', 'playoff'
-    superStageName: 'Super Six',
-    superStageTeams: [], // IDs of teams in Super Stage
-    qualificationCount: 4 // Number of teams qualifying from Super Stage to Playoffs
-  }
+  stages: [
+    {
+      id: 'stage_1',
+      name: 'Group Stage',
+      type: 'group',
+      settings: { numGroups: 2, qualifiersPerGroup: 2, matchType: 'round_robin' }
+    }
+  ],
+  currentStageId: 'stage_1'
 };
 
 // --- Helpers ---
@@ -163,115 +164,112 @@ const Badge = ({ status }) => {
   );
 };
 
-// --- Roadmap View (Bracket Style) ---
+// --- Roadmap View (Dynamic) ---
 const RoadmapView = ({ teams, matches, config, standings }) => {
-  const groups = config.tournamentType === 'group'
-    ? [...new Set(standings.all.map(s => s.group || 'A'))].sort()
-    : ['League'];
-
-  // Helper to find a match by stage or name
-  const findMatch = (stage, name) => matches.find(m => m.stage === stage && (m.matchName === name || m.matchName?.includes(name)));
-
-  // Determine if League is Finished
-  const leagueMatches = matches.filter(m => m.stage.startsWith('Group') || m.stage === 'league');
-  const isLeagueFinished = leagueMatches.length > 0 && leagueMatches.every(m => m.status === 'finished');
-
-  const getQualifierName = (group, position) => {
-    if (!isLeagueFinished) return `${group}${position}`;
-    const sortedGroup = standings.all.filter(s => (s.group || 'A') === group).sort((a, b) => a.rank - b.rank); // Pre-sorted in main standings, filtering preserves order
-    return sortedGroup[position - 1]?.name || 'TBD';
-  };
-
-  // Semis
-  const semi1 = findMatch('semis', 'Semi Final 1');
-  const semi2 = findMatch('semis', 'Semi Final 2');
-
-  // Final
-  const finalMatch = findMatch('final', 'Final');
-
-  // Resolve Names for Display
-  const resolveTeamName = (id, placeholder) => {
-    if (!id || id === 'TBD') return placeholder; // If ID is missing or explicit TBD
-    const team = teams.find(t => t.id === id);
-    return team ? team.name : placeholder; // If ID exists but team not found (rare), or valid team
-  };
+  const stages = config.stages || [];
 
   return (
-    <div className="overflow-x-auto py-10">
-      <div className="flex justify-between items-center min-w-[1000px] gap-8">
+    <div className="overflow-x-auto py-10 px-4">
+      <div className="flex items-start gap-8 min-w-max">
+        {stages.map((stage, idx) => (
+          <div key={stage.id} className="flex items-start gap-8 animate-fade-in-up" style={{ animationDelay: `${idx * 100}ms` }}>
 
-        {/* STAGE 1: GROUPS / LEAGUE */}
-        <div className="flex flex-col gap-4">
-          {groups.map(g => (
-            <GlassCard key={g} className="p-4 w-56 border-l-4 border-blue-500">
-              <h4 className="text-blue-400 font-bold uppercase tracking-widest text-xs mb-3">Group {g} Results</h4>
-              <div className="space-y-1">
-                {standings.all.filter(s => (s.group || 'A') === g).slice(0, config.roadmap?.qualifiers || 2).map((s, i) => (
-                  <div key={s.id} className="text-xs flex justify-between text-slate-300">
-                    <span>{i + 1}. {s.name}</span>
-                    <span>{s.leaguePoints}pts</span>
-                  </div>
-                ))}
+            {/* STAGE COLUMN */}
+            <div className="flex flex-col gap-4">
+
+              {/* HEADER */}
+              <div className="uppercase font-bold text-xs tracking-widest text-slate-500 mb-2 border-b border-slate-700 pb-1">
+                {stage.name}
               </div>
-            </GlassCard>
-          ))}
-        </div>
 
-        <ChevronRight className="text-slate-600" />
+              {/* CONTENT BASED ON TYPE */}
+              {stage.type === 'group' && (
+                <div className="flex flex-col gap-4">
+                  {/* Group Tables */}
+                  {[...Array(stage.settings.numGroups || 1)].map((_, gIdx) => {
+                    const groupName = String.fromCharCode(65 + gIdx); // A, B, C...
+                    const groupStandings = standings.all?.filter(s => (s.group || 'A') === groupName) || [];
+                    return (
+                      <GlassCard key={gIdx} className="p-4 w-64 border-l-4 border-blue-500">
+                        <h5 className="text-blue-400 font-bold uppercase tracking-widest text-[10px] mb-3">Group {groupName}</h5>
+                        <div className="space-y-1">
+                          {groupStandings.slice(0, stage.settings.qualifiersPerGroup || 2).map((s, i) => (
+                            <div key={s.id} className="text-xs flex justify-between text-slate-300">
+                              <span>{i + 1}. {s.name}</span>
+                              <span>{s.leaguePoints}pts</span>
+                            </div>
+                          ))}
+                          {groupStandings.length === 0 && <div className="text-xs text-slate-500 italic">No Data</div>}
+                        </div>
+                      </GlassCard>
+                    );
+                  })}
+                </div>
+              )}
 
-        {/* STAGE 2: SUPER STAGE (Conditional) */}
-        {(config.roadmap?.currentStage === 'super_league' || config.roadmap?.currentStage === 'playoff' || (config.roadmap?.superStageTeams?.length > 0)) && (
-          <>
-            <GlassCard className="p-4 w-64 border-l-4 border-purple-500">
-              <h4 className="text-purple-400 font-bold uppercase tracking-widest text-xs mb-3">{config.roadmap?.superStageName || 'Super Stage'}</h4>
-              <div className="space-y-1">
-                {standings.superStage.map((s, i) => (
-                  <div key={s.id} className={`text-xs flex justify-between ${i < (config.roadmap?.qualificationCount || 4) ? 'text-green-300 font-bold' : 'text-slate-400'}`}>
-                    <span>{i + 1}. {s.name}</span>
-                    <span>{s.leaguePoints}</span>
+              {stage.type === 'league' && (
+                <GlassCard className="p-4 w-72 border-l-4 border-purple-500">
+                  {/* Super Six / League Table */}
+                  <div className="space-y-1">
+                    {(standings[stage.id] || standings.superStage || []).map((s, i) => (
+                      <div key={s.id} className={`text-xs flex justify-between ${i < (stage.settings.qualifiers || 4) ? 'text-green-300 font-bold' : 'text-slate-400'}`}>
+                        <span>{i + 1}. {s.name}</span>
+                        <span>{s.leaguePoints}pts</span>
+                      </div>
+                    ))}
+                    {(!standings[stage.id] && (!standings.superStage || standings.superStage.length === 0)) && <div className="text-xs text-slate-500 italic">Waiting for Qualifiers</div>}
                   </div>
-                ))}
-              </div>
-            </GlassCard>
-            <ChevronRight className="text-slate-600" />
-          </>
-        )}
+                </GlassCard>
+              )}
 
-        {/* STAGE 3: PLAYOFFS */}
-        <div className="flex flex-col justify-around gap-8">
-          {/* Dynamic Rendering based on Format */}
-          {config.roadmap?.playoffType === 'eliminator' ? (
-            <div className="flex flex-col gap-8">
-              <GlassCard className="w-64 p-3 border-l-4 border-yellow-500">
-                <div className="text-[10px] text-yellow-500 uppercase font-bold">Eliminator (2nd vs 3rd)</div>
-                {(() => {
-                  const elim = findMatch('playoff', 'Eliminator');
-                  return elim ? (
-                    <div className="text-sm mt-2">
-                      <div className={elim.winner === elim.teamA ? 'text-green-400' : 'text-white'}>{resolveTeamName(elim.teamA, 'Rank 2')} vs</div>
-                      <div className={elim.winner === elim.teamB ? 'text-green-400' : 'text-white'}>{resolveTeamName(elim.teamB, 'Rank 3')}</div>
-                    </div>
-                  ) : <div className="text-xs text-slate-500 mt-2">Scheduled after Super Stage</div>;
-                })()}
-              </GlassCard>
+              {stage.type === 'knockout' && (
+                <div className="flex flex-col gap-4">
+                  {/* Simplified Bracket View: List matches in this stage */}
+                  {matches.filter(m => m.stageId === stage.id).sort((a, b) => (a.matchName || '').localeCompare(b.matchName || '')).map(m => {
+                    const teamAName = teams.find(t => t.id === m.teamA)?.name || (m.teamA?.includes('PLACEHOLDER') || m.teamA === 'TBA' ? 'TBA' : m.teamA);
+                    const teamBName = teams.find(t => t.id === m.teamB)?.name || (m.teamB?.includes('PLACEHOLDER') || m.teamB === 'TBA' ? 'TBA' : m.teamB);
+                    return (
+                      <GlassCard key={m.id} className={`w-64 p-3 border-l-4 ${m.status === 'finished' ? 'border-slate-600' : 'border-yellow-500'}`}>
+                        <div className="text-[10px] text-slate-400 uppercase font-bold mb-1">{m.matchName}</div>
+                        <div className="text-sm">
+                          <div className={`flex justify-between ${m.winner === m.teamA ? 'text-green-400 font-bold' : 'text-slate-200'}`}>
+                            <span>{teamAName}</span>
+                            {m.status === 'finished' && <span>{m.setsA}</span>}
+                          </div>
+                          <div className={`flex justify-between ${m.winner === m.teamB ? 'text-green-400 font-bold' : 'text-slate-200'}`}>
+                            <span>{teamBName}</span>
+                            {m.status === 'finished' && <span>{m.setsB}</span>}
+                          </div>
+                        </div>
+                      </GlassCard>
+                    );
+                  })}
+                  {matches.filter(m => m.stageId === stage.id).length === 0 && (
+                    <div className="text-xs text-slate-500 italic">Matches TBA</div>
+                  )}
+                </div>
+              )}
+
             </div>
-          ) : (
-            <>
-              {/* Standard Semis */}
-              <GlassCard className="w-56 p-2"><div className="text-xs text-center">Semi Final 1</div></GlassCard>
-              <GlassCard className="w-56 p-2"><div className="text-xs text-center">Semi Final 2</div></GlassCard>
-            </>
-          )}
-        </div>
 
-        <ChevronRight className="text-slate-600" />
+            {/* ARROW INDICATOR (Except last stage) */}
+            {idx < stages.length - 1 && (
+              <div className="mt-10 text-slate-700">
+                <ChevronRight size={24} />
+              </div>
+            )}
+          </div>
+        ))}
 
-        {/* FINAL */}
-        <GlassCard className="w-64 p-6 border-2 border-orange-500 tx-center">
-          <Trophy className="mx-auto text-orange-500 mb-2" />
-          <div className="text-center font-black text-xl text-white">CHAMPION</div>
-          <div className="text-center text-orange-400 text-sm mt-2">{finalMatch?.winner ? resolveTeamName(finalMatch.winner) : '???'}</div>
-        </GlassCard>
+        {/* CHAMPION TROPHY */}
+        {stages.length > 0 && (
+          <div className="mt-10 ml-8">
+            <GlassCard className="w-56 p-6 border-2 border-orange-500/50 flex flex-col items-center justify-center opacity-80">
+              <Trophy className="text-orange-500 mb-2" size={32} />
+              <div className="font-black text-xl text-white tracking-tighter">WINNER</div>
+            </GlassCard>
+          </div>
+        )}
 
       </div>
     </div>
@@ -693,6 +691,158 @@ const AdminScorer = ({ match, teams = [], config, handleScore, setView, updateDo
   );
 };
 
+// --- Stage Builder Component ---
+const StageBuilder = ({ config, updateConfig }) => {
+  const [newStage, setNewStage] = useState({ name: '', type: 'league' });
+  const [showAdd, setShowAdd] = useState(false);
+
+  const addStage = () => {
+    if (!newStage.name) return;
+    const nextId = `stage_${config.stages.length + 1}`;
+
+    let settings = {};
+    if (newStage.type === 'league') {
+      settings = { composition: 'top_n', qualifiersFromPrev: 2, matchType: 'round_robin', carryForward: true };
+    } else if (newStage.type === 'knockout') {
+      settings = { format: 'standard' }; // standard, wpl_eliminator, ipl
+    }
+
+    const stage = {
+      id: nextId,
+      name: newStage.name,
+      type: newStage.type,
+      settings
+    };
+
+    updateConfig({
+      ...config,
+      stages: [...config.stages, stage]
+    });
+    setNewStage({ name: '', type: 'league' });
+    setShowAdd(false);
+  };
+
+  const removeStage = (index) => {
+    const newStages = [...config.stages];
+    newStages.splice(index, 1);
+    updateConfig({ ...config, stages: newStages });
+  };
+
+  const updateStageSettings = (index, key, value) => {
+    const newStages = [...config.stages];
+    newStages[index].settings = { ...newStages[index].settings, [key]: value };
+    updateConfig({ ...config, stages: newStages });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center pb-4 border-b border-white/10">
+        <h3 className="font-bold text-white text-lg">Tournament Roadmap (Stages)</h3>
+        {!showAdd && <button onClick={() => setShowAdd(true)} className="flex items-center gap-1 text-xs bg-blue-600 hover:bg-blue-500 px-3 py-2 rounded font-bold uppercase tracking-wider"><Plus size={14} /> Add Stage</button>}
+      </div>
+
+      <div className="relative border-l-2 border-slate-700 pl-6 space-y-8">
+        {config.stages.map((stage, idx) => (
+          <div key={stage.id} className="relative bg-slate-800/50 p-4 rounded border border-white/5">
+            {/* Timeline Dot */}
+            <div className="absolute -left-[31px] top-4 w-4 h-4 rounded-full bg-blue-500 border-4 border-slate-900" />
+
+            <div className="flex justify-between items-start mb-3">
+              <div>
+                <span className="text-[10px] bg-slate-700 px-2 py-0.5 rounded text-slate-300 uppercase tracking-wider font-bold mr-2">{idx + 1}. {stage.type}</span>
+                <h4 className="text-white font-bold inline">{stage.name}</h4>
+              </div>
+              {idx > 0 && (
+                <button onClick={() => removeStage(idx)} className="text-slate-500 hover:text-red-400"><Trash2 size={14} /></button>
+              )}
+            </div>
+
+            {/* Stage Specific Settings */}
+            <div className="grid grid-cols-2 gap-4 text-xs">
+              {stage.type === 'group' && (
+                <>
+                  <div>
+                    <label className="block text-slate-500 mb-1">Number of Groups</label>
+                    <select className="bg-slate-900 p-2 rounded text-white w-full" value={stage.settings.numGroups} onChange={e => updateStageSettings(idx, 'numGroups', parseInt(e.target.value))}>
+                      <option value={1}>1 Group (Single Pool)</option>
+                      <option value={2}>2 Groups</option>
+                      <option value={3}>3 Groups</option>
+                      <option value={4}>4 Groups</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-500 mb-1">Qualifiers per Group</label>
+                    <input type="number" className="bg-slate-900 p-2 rounded text-white w-full" value={stage.settings.qualifiersPerGroup} onChange={e => updateStageSettings(idx, 'qualifiersPerGroup', parseInt(e.target.value))} />
+                  </div>
+                </>
+              )}
+
+              {stage.type === 'league' && (
+                <>
+                  <div>
+                    <label className="block text-slate-500 mb-1">Composition</label>
+                    <select className="bg-slate-900 p-2 rounded text-white w-full" value={stage.settings.composition || 'top_n'} onChange={e => updateStageSettings(idx, 'composition', e.target.value)}>
+                      <option value="top_n">Top N from Previous</option>
+                      <option value="manual">Manual Selection</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-500 mb-1">Qualifiers to Promote</label>
+                    <input type="number" className="bg-slate-900 p-2 rounded text-white w-full" value={stage.settings.qualifiersFromPrev || 2} onChange={e => updateStageSettings(idx, 'qualifiersFromPrev', parseInt(e.target.value))} />
+                  </div>
+                  <div>
+                    <label className="block text-slate-500 mb-1">Match Type</label>
+                    <select className="bg-slate-900 p-2 rounded text-white w-full" value={stage.settings.matchType || 'round_robin'} onChange={e => updateStageSettings(idx, 'matchType', e.target.value)}>
+                      <option value="round_robin">Round Robin</option>
+                      <option value="manual">Manual Fixtures</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2 mt-4">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={stage.settings.carryForward || false} onChange={e => updateStageSettings(idx, 'carryForward', e.target.checked)} />
+                      <span className="text-slate-300">Carry Forward Head-to-Head Points</span>
+                    </label>
+                  </div>
+                </>
+              )}
+
+              {stage.type === 'knockout' && (
+                <div className="col-span-2">
+                  <label className="block text-slate-500 mb-1">Knockout Format</label>
+                  <select className="bg-slate-900 p-2 rounded text-white w-full" value={stage.settings.format || 'standard'} onChange={e => updateStageSettings(idx, 'format', e.target.value)}>
+                    <option value="standard">Standard Semis (1v4, 2v3)</option>
+                    <option value="wpl_eliminator">WPL Style (1 to Final, 2v3 to Elim)</option>
+                    <option value="ipl">IPL Style (Page Playoff)</option>
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {/* Add New Stage Form */}
+        {showAdd && (
+          <div className="relative bg-slate-800 p-4 rounded border border-blue-500/50 animate-fade-in">
+            <div className="absolute -left-[31px] top-4 w-4 h-4 rounded-full bg-slate-700 border-4 border-slate-900" />
+            <h4 className="font-bold text-white mb-3">Add Next Stage</h4>
+            <div className="grid gap-3">
+              <input className="bg-slate-900 p-2 rounded text-white text-sm" placeholder="Stage Name (e.g. Super Six)" value={newStage.name} onChange={e => setNewStage({ ...newStage, name: e.target.value })} />
+              <select className="bg-slate-900 p-2 rounded text-white text-sm" value={newStage.type} onChange={e => setNewStage({ ...newStage, type: e.target.value })}>
+                <option value="league">Intermediate League (Super Six/Eight)</option>
+                <option value="knockout">Knockout / Playoffs</option>
+              </select>
+              <div className="flex gap-2 justify-end mt-2">
+                <button onClick={() => setShowAdd(false)} className="text-xs text-slate-400 font-bold px-3 py-2">Cancel</button>
+                <button onClick={addStage} className="text-xs bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded">Create Stage</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // --- Admin Dashboard ---
 const AdminDashboard = ({
   teams, matches, players, config, updateConfig, setIsAdmin, setView,
@@ -762,51 +912,118 @@ const AdminDashboard = ({
     reader.readAsText(csvFile);
   };
 
-  const generateFixtures = () => {
-    if (config.tournamentType === 'round-robin') {
-      const generated = [];
-      const teamIds = teams.map(t => t.id);
-      for (let i = 0; i < teamIds.length; i++) {
-        for (let j = i + 1; j < teamIds.length; j++) {
-          generated.push({
-            teamA: teamIds[i],
-            teamB: teamIds[j],
-            date: new Date().toISOString().split('T')[0],
-            time: '18:00',
-            stage: 'league',
-            matchName: `League Match ${generated.length + 1}`
-          });
-        }
-      }
-      generated.forEach(g => createFixture(g));
-      alert(`Generated ${generated.length} matches!`);
-    } else if (config.tournamentType === 'group') {
+  /* --- AUTO SCHEDULER (Dynamic) --- */
+  const generateFixtures = async () => {
+    let newMatches = [];
+    const stages = config.stages || [];
+    if (stages.length === 0) return alert("No stages configured! Please configure roadmap first.");
+
+    // 1. Group Stage (Stage 1) - Real Matches
+    const groupStage = stages.find(s => s.type === 'group');
+    if (groupStage) {
       const groups = {};
-      teams.forEach(team => {
-        const g = team.group || 'A'; // Default to A if not set
+      // Assign teams to groups if not already (or just read them)
+      // For generation, we assume teams have 'group' property set 'A', 'B', etc.
+      teams.forEach(t => {
+        const g = t.group || 'A';
         if (!groups[g]) groups[g] = [];
-        groups[g].push(team.id);
+        groups[g].push(t.id);
       });
 
-      let generated = 0;
       Object.entries(groups).forEach(([groupName, groupTeams]) => {
         for (let i = 0; i < groupTeams.length; i++) {
           for (let j = i + 1; j < groupTeams.length; j++) {
-            createFixture({
+            newMatches.push({
               teamA: groupTeams[i],
               teamB: groupTeams[j],
               date: new Date().toISOString().split('T')[0],
               time: '18:00',
               stage: `Group ${groupName}`,
-              matchName: `Group ${groupName} Match`
+              stageId: groupStage.id,
+              matchName: `Group ${groupName} Match`,
+              status: 'scheduled'
             });
-            generated++;
           }
         }
       });
-      alert(`Generated ${generated} matches across ${Object.keys(groups).length} groups!`);
-    } else {
-      alert("Only Round Robin & Group generation supported.");
+    }
+
+    // 2. Future Stages (Placeholders)
+    stages.forEach((stage, idx) => {
+      if (stage.type === 'group') return; // Handled above
+
+      if (stage.type === 'league') {
+        // e.g. Super Six (Round Robin)
+        // We don't know teams yet, so we use placeholders: "Q1", "Q2", ...
+        // Total teams = numGroups * qualifiersPerGroup
+        // Or manual composition?
+        // Let's assume Top N from previous stage.
+        const prevStage = stages[idx - 1];
+        if (!prevStage) return;
+
+        const numQualifiers = (stage.settings.qualifiersFromPrev || 2) * (prevStage.settings.numGroups || 2); // Approximate
+        const placeholders = Array.from({ length: numQualifiers }, (_, i) => `PLACEHOLDER:S${idx}:T${i + 1}`); // S2:T1 (Stage 2 Team 1)
+
+        if (stage.settings.matchType === 'round_robin') {
+          for (let i = 0; i < placeholders.length; i++) {
+            for (let j = i + 1; j < placeholders.length; j++) {
+              newMatches.push({
+                teamA: 'TBA', // To be filled later
+                teamB: 'TBA',
+                date: new Date().toISOString().split('T')[0],
+                time: '20:00',
+                stage: stage.name, // "Super Six"
+                stageId: stage.id,
+                matchName: `${stage.name} Match`,
+                isPlaceholder: true,
+                status: 'scheduled' // or 'tba'
+              });
+            }
+          }
+        }
+      }
+
+      if (stage.type === 'knockout') {
+        const format = stage.settings.format || 'standard';
+
+        if (format === 'wpl_eliminator') {
+          // Eliminator (2 vs 3)
+          newMatches.push({
+            teamA: 'TBA', // Rank 2
+            teamB: 'TBA', // Rank 3
+            date: new Date().toISOString().split('T')[0],
+            time: '18:00',
+            stage: stage.name,
+            stageId: stage.id,
+            matchName: 'Eliminator',
+            status: 'scheduled'
+          });
+          // Final (1 vs Winner Eliminator)
+          newMatches.push({
+            teamA: 'TBA', // Rank 1
+            teamB: 'TBA', // Winner Elim
+            date: new Date().toISOString().split('T')[0],
+            time: '20:00',
+            stage: 'Final', // Special case name
+            stageId: stage.id,
+            matchName: 'Final',
+            status: 'scheduled'
+          });
+        }
+        else if (format === 'standard') {
+          // Semis
+          newMatches.push({ teamA: 'TBA', teamB: 'TBA', stage: stage.name, matchName: 'Semi Final 1', stageId: stage.id, date: new Date().toISOString().split('T')[0], time: '18:00', status: 'scheduled' });
+          newMatches.push({ teamA: 'TBA', teamB: 'TBA', stage: stage.name, matchName: 'Semi Final 2', stageId: stage.id, date: new Date().toISOString().split('T')[0], time: '20:00', status: 'scheduled' });
+          newMatches.push({ teamA: 'TBA', teamB: 'TBA', stage: 'Final', matchName: 'Final', stageId: stage.id, date: new Date().toISOString().split('T')[0], time: '21:00', status: 'scheduled' });
+        }
+      }
+    });
+
+    if (confirm(`Generate ${newMatches.length} Matches (including placeholders for future rounds)? This will wipe existing matches if you agree.`)) {
+      // Ideally we would batch delete/add, but here we just loop
+      // In a real app we'd clear the collection first.
+      newMatches.forEach(m => createFixture(m));
+      alert("Fixtures Generated!");
     }
   };
 
@@ -1164,9 +1381,9 @@ const AdminDashboard = ({
                     </select>
                   </div>
 
-                  {/* League Rules */}
+                  {/* Match Rules (Global) */}
                   <div className="bg-slate-900/50 p-4 rounded-lg border border-white/5">
-                    <h4 className="text-yellow-400 font-bold mb-4 uppercase tracking-wider text-sm">League Stage Rules</h4>
+                    <h4 className="text-yellow-400 font-bold mb-4 uppercase tracking-wider text-sm">Match Rules</h4>
                     <div className="grid grid-cols-3 gap-4">
                       <div>
                         <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Sets</label>
@@ -1183,27 +1400,14 @@ const AdminDashboard = ({
                     </div>
                   </div>
 
-                  {/* Playoff Rules */}
-                  <div className="bg-slate-900/50 p-4 rounded-lg border border-white/5">
-                    <h4 className="text-red-400 font-bold mb-4 uppercase tracking-wider text-sm">Playoff Rules (Semis/Finals)</h4>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Sets</label>
-                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules?.playoff?.sets || 5} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, playoff: { ...(localConfig.matchRules?.playoff || {}), sets: parseInt(e.target.value) } } })} />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Points</label>
-                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules?.playoff?.points || 25} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, playoff: { ...(localConfig.matchRules?.playoff || {}), points: parseInt(e.target.value) } } })} />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tie-Break</label>
-                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules?.playoff?.tieBreak || 15} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, playoff: { ...(localConfig.matchRules?.playoff || {}), tieBreak: parseInt(e.target.value) } } })} />
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* Roadmap Configuration */}
-                  <div className="bg-slate-900/50 p-4 rounded-lg border border-white/5">
+
+                  {/* STAGE BUILDER */}
+                  <div className="bg-slate-900/80 p-6 rounded-xl border border-white/5">
+                    <StageBuilder config={localConfig} updateConfig={setLocalConfig} />
+                  </div>
+                  {/* Legacy Config Hidden */}
+                  <div className="hidden">
                     <h4 className="text-purple-400 font-bold mb-4 uppercase tracking-wider text-sm">Roadmap Configuration</h4>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -1214,7 +1418,7 @@ const AdminDashboard = ({
                         <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Playoff Format</label>
                         <select className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.roadmap?.playoffType || 'semis'} onChange={e => setLocalConfig({ ...localConfig, roadmap: { ...localConfig.roadmap, playoffType: e.target.value } })}>
                           <option value="semis">Standard Semis (A1 vs B2, B1 vs A2)</option>
-                          <option value="eliminator">WPL / Eliminator (1->Final, 2vs3->Final)</option>
+                          <option value="eliminator">WPL / Eliminator</option>
                           <option value="ipl">Page Playoff (Qualifier 1, Eliminator, Qualifier 2)</option>
                         </select>
                       </div>
@@ -1444,57 +1648,42 @@ export default function App() {
   };
 
   // --- Standings Calculation ---
+  // --- Standings Logic (Dynamic) ---
   const standings = useMemo(() => {
-    // Determine which teams/matches to consider based on view context or stage
-    // For general standings, valid logic is:
-    // 1. Group Stage: All matches.
-    // 2. Super Stage: Only matches between Qualified Teams (carry forward group results if applicable).
-
-    // We calculate "Global" stats first, but we need stage-specific tables.
-    // Let's create a helper to calculate stats for a specific set of teams and matches.
-
-    const calculateStats = (teamsList, matchesList) => {
-      return teamsList.map(team => {
-        // Filter matches: Must involve this team AND opponent must be in the teamsList (for Super Stage isolation)
-        const relevantMatches = matchesList.filter(m => {
-          const isInvolved = (m.teamA === team.id || m.teamB === team.id);
-          if (!isInvolved) return false;
-          if (m.status !== 'finished') return false;
-
-          // Strict filtering for Super Stage: Opponent must also be in the list
-          const opponentId = m.teamA === team.id ? m.teamB : m.teamA;
-          const opponentInList = teamsList.some(t => t.id === opponentId);
-          return opponentInList;
-        });
-
+    // Helper to calculate stats for a specific list of teams and matches
+    const calculateStats = (stageTeams, stageMatches) => {
+      return stageTeams.map(team => {
         let played = 0, won = 0, lost = 0;
         let setsWon = 0, setsLost = 0;
         let pointsWon = 0, pointsLost = 0;
         let leaguePoints = 0;
 
-        relevantMatches.forEach(m => {
+        stageMatches.forEach(m => {
+          if (m.status !== 'finished') return;
+          const isA = m.teamA === team.id;
+          const isB = m.teamB === team.id;
+          if (!isA && !isB) return;
+
+          const setsA = m.score?.filter(s => s.a > s.b).length || 0;
+          const setsB = m.score?.filter(s => s.b > s.a).length || 0;
+          // Fallback to legacy setsA/setsB if score array not fully populated or relied upon
+          const finalSetsA = m.setsA ?? setsA;
+          const finalSetsB = m.setsB ?? setsB;
+
+          const teamSets = isA ? finalSetsA : finalSetsB;
+          const oppSets = isA ? finalSetsB : finalSetsA;
+
           played++;
-          const isTeamA = m.teamA === team.id;
+          if (teamSets > oppSets) won++; else lost++;
+          setsWon += teamSets;
+          setsLost += oppSets;
 
-          // Match Result
-          if (m.winner === team.id) {
-            won++;
-            leaguePoints += 2;
-          } else {
-            lost++;
-          }
+          m.score?.forEach(s => {
+            pointsWon += isA ? (s.a || 0) : (s.b || 0);
+            pointsLost += isA ? (s.b || 0) : (s.a || 0);
+          });
 
-          // Sets
-          setsWon += isTeamA ? m.setsA : m.setsB;
-          setsLost += isTeamA ? m.setsB : m.setsA;
-
-          // Points
-          if (m.scores) {
-            m.scores.forEach(s => {
-              pointsWon += isTeamA ? s.a : s.b;
-              pointsLost += isTeamA ? s.b : s.a;
-            });
-          }
+          if (teamSets > oppSets) leaguePoints += 2;
         });
 
         const setRatio = setsLost === 0 ? setsWon : setsWon / setsLost;
@@ -1515,17 +1704,64 @@ export default function App() {
       });
     };
 
-    // 1. Global/Group Standings (All Teams, All Matches)
-    // Actually for Group stage, we want all matches.
-    // For Super Stage, we only want matches between Super Teams.
+    const stages = config.stages || [];
+    const calculated = { all: [] };
 
-    return {
-      all: calculateStats(teams, matches),
-      superStage: config.roadmap?.superStageTeams?.length > 0
-        ? calculateStats(teams.filter(t => config.roadmap.superStageTeams.includes(t.id)), matches)
-        : []
-    };
-  }, [teams, matches, config.roadmap, players]);
+    // 1. Overall / Group Stage (Default 'all')
+    const groupStage = stages.find(s => s.type === 'group');
+    if (groupStage) {
+      // Only include matches from group stage
+      calculated.all = calculateStats(teams, matches.filter(m => m.stageId === groupStage.id || m.stage?.startsWith('Group')));
+    } else {
+      // Fallback: All matches
+      calculated.all = calculateStats(teams, matches);
+    }
+
+    // 2. Per Stage Standings
+    stages.forEach(stage => {
+      if (stage.type === 'league') {
+        const stageTeamIds = stage.settings?.teams || []; // Teams in this league
+        const stageTeams = teams.filter(t => stageTeamIds.includes(t.id));
+
+        let relevantMatches = matches.filter(m => m.stageId === stage.id);
+
+        if (stage.settings?.carryForward) {
+          // Carry forward matches between qualified teams from previous stages
+          const carryMatches = matches.filter(m => {
+            if (m.stageId === stage.id) return false;
+            if (m.status !== 'finished') return false;
+            const isTA = stageTeamIds.includes(m.teamA);
+            const isTB = stageTeamIds.includes(m.teamB);
+            return isTA && isTB;
+          });
+          relevantMatches = [...relevantMatches, ...carryMatches];
+        }
+
+        calculated[stage.id] = calculateStats(stageTeams, relevantMatches);
+
+        // Legacy support for 'superStage' if this is the super stage
+        // We can check stage name or just map it?
+        // Let's assume the 'super_league' in roadmap corresponds to one of these.
+      }
+    });
+
+    // Legacy / Backward Compat for RoadmapView
+    if (config.roadmap?.superStageTeams) {
+      // If we have legacy config active
+      const superTeams = teams.filter(t => config.roadmap.superStageTeams.includes(t.id));
+      calculated.superStage = calculateStats(superTeams, matches);
+    } else {
+      // Try to map from new stages
+      const superStage = stages.find(s => s.type === 'league');
+      if (superStage && calculated[superStage.id]) {
+        calculated.superStage = calculated[superStage.id];
+      } else {
+        calculated.superStage = [];
+      }
+    }
+
+    return calculated;
+  }, [teams, matches, config.stages, config.roadmap, players]);
 
 
   const generatePlayoffs = async () => {
