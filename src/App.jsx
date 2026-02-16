@@ -1730,7 +1730,7 @@ export default function App() {
               <div className="space-y-8">
                 {(() => {
                   const groups = config.tournamentType === 'group'
-                    ? [...new Set(standings.map(s => s.group || 'A'))].sort()
+                    ? [...new Set(standings.all.map(s => s.group || 'A'))].sort()
                     : ['ALL'];
 
                   return groups.map(groupName => {
