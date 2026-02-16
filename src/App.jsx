@@ -170,6 +170,13 @@ const Badge = ({ status }) => {
 const RoadmapView = ({ teams, matches, config, standings }) => {
   const stages = config.stages || [];
 
+  const getTeamName = (id) => {
+    const t = teams.find(t => t.id === id);
+    if (t) return t.name;
+    if (id?.startsWith('PLACEHOLDER')) return 'TBD';
+    return id || 'TBD';
+  };
+
   return (
     <div className="overflow-x-auto py-10 px-4">
       <div className="flex items-start gap-8 min-w-max">
@@ -187,9 +194,8 @@ const RoadmapView = ({ teams, matches, config, standings }) => {
               {/* CONTENT BASED ON TYPE */}
               {stage.type === 'group' && (
                 <div className="flex flex-col gap-4">
-                  {/* Group Tables */}
                   {[...Array(stage.settings.numGroups || 1)].map((_, gIdx) => {
-                    const groupName = String.fromCharCode(65 + gIdx); // A, B, C...
+                    const groupName = String.fromCharCode(65 + gIdx); // A, B...
                     const groupStandings = standings.all?.filter(s => (s.group || 'A') === groupName) || [];
                     return (
                       <GlassCard key={gIdx} className="p-4 w-64 border-l-4 border-blue-500">
@@ -198,7 +204,7 @@ const RoadmapView = ({ teams, matches, config, standings }) => {
                           {groupStandings.slice(0, stage.settings.qualifiersPerGroup || 2).map((s, i) => (
                             <div key={s.id} className="text-xs flex justify-between text-slate-300">
                               <span>{i + 1}. {s.name}</span>
-                              <span>{s.leaguePoints}pts</span>
+                              <span className="font-mono text-blue-400">{s.leaguePoints}pts</span>
                             </div>
                           ))}
                           {groupStandings.length === 0 && <div className="text-xs text-slate-500 italic">No Data</div>}
@@ -211,50 +217,97 @@ const RoadmapView = ({ teams, matches, config, standings }) => {
 
               {stage.type === 'league' && (
                 <GlassCard className="p-4 w-72 border-l-4 border-purple-500">
-                  {/* Super Six / League Table */}
+                  <h5 className="text-purple-400 font-bold uppercase tracking-widest text-[10px] mb-3">Standings</h5>
                   <div className="space-y-1">
                     {(standings[stage.id] || standings.superStage || []).map((s, i) => (
                       <div key={s.id} className={`text-xs flex justify-between ${i < (stage.settings.qualifiers || 4) ? 'text-green-300 font-bold' : 'text-slate-400'}`}>
                         <span>{i + 1}. {s.name}</span>
-                        <span>{s.leaguePoints}pts</span>
+                        <span className="font-mono">{s.leaguePoints}pts</span>
                       </div>
                     ))}
-                    {(!standings[stage.id] && (!standings.superStage || standings.superStage.length === 0)) && <div className="text-xs text-slate-500 italic">Waiting for Qualifiers</div>}
+                    {(!standings[stage.id] && (!standings.superStage || standings.superStage.length === 0)) && <div className="text-xs text-slate-500 italic">Waiting for Qualifiers (A1, B1...)</div>}
                   </div>
                 </GlassCard>
               )}
 
-              {stage.type === 'knockout' && (
-                <div className="flex flex-col gap-4">
-                  {/* Simplified Bracket View: List matches in this stage */}
-                  {matches.filter(m => m.stageId === stage.id).sort((a, b) => (a.matchName || '').localeCompare(b.matchName || '')).map(m => {
-                    const teamAName = teams.find(t => t.id === m.teamA)?.name || (m.teamA?.includes('PLACEHOLDER') || m.teamA === 'TBA' ? 'TBA' : m.teamA);
-                    const teamBName = teams.find(t => t.id === m.teamB)?.name || (m.teamB?.includes('PLACEHOLDER') || m.teamB === 'TBA' ? 'TBA' : m.teamB);
-                    return (
-                      <GlassCard key={m.id} className={`w-64 p-3 border-l-4 ${m.status === 'finished' ? 'border-slate-600' : 'border-yellow-500'}`}>
-                        <div className="text-[10px] text-slate-400 uppercase font-bold mb-1">{m.matchName}</div>
-                        <div className="text-sm">
-                          <div className={`flex justify-between ${m.winner === m.teamA ? 'text-green-400 font-bold' : 'text-slate-200'}`}>
-                            <span>{teamAName}</span>
-                            {m.status === 'finished' && <span>{m.setsA}</span>}
-                          </div>
-                          <div className={`flex justify-between ${m.winner === m.teamB ? 'text-green-400 font-bold' : 'text-slate-200'}`}>
-                            <span>{teamBName}</span>
-                            {m.status === 'finished' && <span>{m.setsB}</span>}
-                          </div>
+              {stage.type === 'knockout' && stage.settings?.format === 'wpl_eliminator' ? (
+                <div className="flex flex-col gap-6 w-80">
+                  {/* WPL VISUALIZATION */}
+                  <div className="relative h-64">
+                    {/* SVG Connectors */}
+                    <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-30">
+                      {/* Rank 1 to Final */}
+                      <path d="M 10 30 C 50 30, 50 150, 200 150" fill="none" stroke="white" strokeWidth="2" strokeDasharray="5,5" />
+                      {/* Eliminator to Final */}
+                      <path d="M 120 220 L 150 220 L 150 180 L 200 160" fill="none" stroke="white" strokeWidth="2" />
+                    </svg>
+
+                    <div className="absolute top-0 left-0">
+                      <span className="text-[10px] font-bold text-green-400 mb-1 block">RANK 1 (Direct Final)</span>
+                      <GlassCard className="p-2 w-32 border-l-4 border-green-500 bg-green-900/20">
+                        <div className="text-xs font-bold text-white">
+                          {getTeamName('Rank 1')}
                         </div>
                       </GlassCard>
-                    );
-                  })}
-                  {matches.filter(m => m.stageId === stage.id).length === 0 && (
-                    <div className="text-xs text-slate-500 italic">Matches TBA</div>
-                  )}
+                    </div>
+
+                    <div className="absolute bottom-0 left-0">
+                      <span className="text-[10px] font-bold text-yellow-500 mb-1 block">ELIMINATOR (2 vs 3)</span>
+                      {matches.filter(m => m.matchName === 'Eliminator').map(m => (
+                        <GlassCard key={m.id} className="p-2 w-40 border-l-4 border-yellow-500">
+                          <div className="text-xs">
+                            <div className={m.winner === m.teamA ? 'text-green-400 font-bold' : 'text-slate-300'}>{getTeamName(m.teamA)}</div>
+                            <div className="text-[9px] text-slate-500 my-0.5">VS</div>
+                            <div className={m.winner === m.teamB ? 'text-green-400 font-bold' : 'text-slate-300'}>{getTeamName(m.teamB)}</div>
+                          </div>
+                        </GlassCard>
+                      ))}
+                      {matches.filter(m => m.matchName === 'Eliminator').length === 0 && (
+                        <GlassCard className="p-2 w-40 border-l-4 border-dashed border-slate-600"><span className="text-xs text-slate-500">TBD vs TBD</span></GlassCard>
+                      )}
+                    </div>
+
+                    <div className="absolute top-32 right-0 transform -translate-y-1/2">
+                      <span className="text-[10px] font-bold text-orange-500 mb-1 block">🏆 FINAL</span>
+                      {matches.filter(m => m.matchName === 'Final' || m.stage === 'Final').map(m => (
+                        <GlassCard key={m.id} className="p-3 w-40 border-2 border-orange-500 shadow-[0_0_20px_rgba(249,115,22,0.3)]">
+                          <div className="text-xs font-bold text-center">
+                            <div className={m.winner === m.teamA ? 'text-green-400 font-bold text-sm' : 'text-white'}>{getTeamName(m.teamA)}</div>
+                            <div className="text-[10px] text-orange-500 my-1 font-black">VS</div>
+                            <div className={m.winner === m.teamB ? 'text-green-400 font-bold text-sm' : 'text-white'}>{getTeamName(m.teamB)}</div>
+                          </div>
+                        </GlassCard>
+                      ))}
+                      {matches.filter(m => m.matchName === 'Final').length === 0 && (
+                        <GlassCard className="p-2 w-40 border-2 border-dashed border-slate-600"><span className="text-xs text-slate-500">Finalist 1 vs Finalist 2</span></GlassCard>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              )}
+              ) : stage.type === 'knockout' ? (
+                <div className="flex flex-col gap-4">
+                  {matches.filter(m => m.stageId === stage.id).sort((a, b) => (a.matchName || '').localeCompare(b.matchName || '')).map(m => (
+                    <GlassCard key={m.id} className={`w-64 p-3 border-l-4 ${m.status === 'finished' ? 'border-slate-600' : 'border-yellow-500'}`}>
+                      <div className="text-[10px] text-slate-400 uppercase font-bold mb-1">{m.matchName}</div>
+                      <div className="text-sm">
+                        <div className={`flex justify-between ${m.winner === m.teamA ? 'text-green-400 font-bold' : 'text-slate-200'}`}>
+                          <span>{getTeamName(m.teamA)}</span>
+                          {m.status === 'finished' && <span>{m.setsA}</span>}
+                        </div>
+                        <div className={`flex justify-between ${m.winner === m.teamB ? 'text-green-400 font-bold' : 'text-slate-200'}`}>
+                          <span>{getTeamName(m.teamB)}</span>
+                          {m.status === 'finished' && <span>{m.setsB}</span>}
+                        </div>
+                      </div>
+                    </GlassCard>
+                  ))}
+                  {matches.filter(m => m.stageId === stage.id).length === 0 && <div className="text-xs text-slate-500 italic">Matches TBA</div>}
+                </div>
+              ) : null}
 
             </div>
 
-            {/* ARROW INDICATOR (Except last stage) */}
+            {/* ARROW INDICATOR */}
             {idx < stages.length - 1 && (
               <div className="mt-10 text-slate-700">
                 <ChevronRight size={24} />
@@ -262,17 +315,7 @@ const RoadmapView = ({ teams, matches, config, standings }) => {
             )}
           </div>
         ))}
-
-        {/* CHAMPION TROPHY */}
-        {stages.length > 0 && (
-          <div className="mt-10 ml-8">
-            <GlassCard className="w-56 p-6 border-2 border-orange-500/50 flex flex-col items-center justify-center opacity-80">
-              <Trophy className="text-orange-500 mb-2" size={32} />
-              <div className="font-black text-xl text-white tracking-tighter">WINNER</div>
-            </GlassCard>
-          </div>
-        )}
-
+        {stages.length === 0 && <div className="text-slate-500 italic">No stages configured.</div>}
       </div>
     </div>
   );
@@ -694,7 +737,7 @@ const AdminScorer = ({ match, teams = [], config, handleScore, setView, updateDo
 };
 
 // --- Stage Builder Component ---
-const StageBuilder = ({ config, updateConfig }) => {
+const StageBuilder = ({ config, updateConfig, completeStage }) => {
   const [newStage, setNewStage] = useState({ name: '', type: 'league' });
   const [showAdd, setShowAdd] = useState(false);
 
@@ -838,6 +881,18 @@ const StageBuilder = ({ config, updateConfig }) => {
                 </div>
               </div>
             </div>
+
+            {/* ACTION FOOTER */}
+            {idx < config.stages.length - 1 && (
+              <div className="mt-4 pt-4 border-t border-white/5 flex justify-end">
+                <button
+                  onClick={() => completeStage && completeStage(stage.id)}
+                  className="flex items-center gap-2 px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600 hover:text-white text-emerald-400 border border-emerald-500/30 rounded font-bold text-xs uppercase tracking-wider transition-all"
+                >
+                  <CheckCircle2 size={14} /> Mark Stage Complete
+                </button>
+              </div>
+            )}
           </div>
         ))}
 
@@ -1069,6 +1124,88 @@ const AdminDashboard = ({
       newMatches.forEach(m => createFixture(m));
       alert("Fixtures Generated!");
     }
+  };
+
+  const completeStage = async (stageId) => {
+    if (!confirm("Are you sure you want to mark this stage as complete? This will finalize standings and replace placeholders in the next stage (e.g. A1, Rank 1) with actual qualified teams.")) return;
+
+    const stages = config.stages || [];
+    const stage = stages.find(s => s.id === stageId);
+    if (!stage) return;
+
+    const nextStageIdx = stages.indexOf(stage) + 1;
+    const nextStage = stages[nextStageIdx];
+
+    // 1. Identify Qualified Teams
+    let qualifiedTeams = [];
+
+    if (stage.type === 'group') {
+      const numGroups = stage.settings.numGroups || 2;
+      const qualifiers = stage.settings.qualifiersPerGroup || 2;
+
+      for (let g = 0; g < numGroups; g++) {
+        const groupChar = String.fromCharCode(65 + g);
+        const groupStandings = standings.all.filter(s => (s.group || 'A') === groupChar);
+        const top = groupStandings.slice(0, qualifiers);
+        qualifiedTeams.push(...top.map((t, i) => ({
+          id: t.id,
+          placeholder: `${groupChar}${i + 1}` // A1, A2
+        })));
+      }
+    }
+    else if (stage.type === 'league') {
+      const table = standings[stage.id] || standings.superStage || [];
+      const qualifiers = (nextStage?.type === 'knockout' ? 4 : (stage.settings.qualifiersFromPrev || 4));
+
+      const top = table.slice(0, qualifiers);
+      qualifiedTeams.push(...top.map((t, i) => ({
+        id: t.id,
+        placeholder: `Rank ${i + 1}`
+      })));
+    }
+
+    if (qualifiedTeams.length === 0) return alert("No qualified teams found! Ensure matches are finished.");
+    console.log("Qualified:", qualifiedTeams);
+
+    // 2. Update Matches
+    let updatesCount = 0;
+    const targetMatches = matches.filter(m => m.status !== 'finished');
+
+    for (const m of targetMatches) {
+      let update = {};
+      const qualifiedA = qualifiedTeams.find(q => q.placeholder === m.teamA);
+      if (qualifiedA) update.teamA = qualifiedA.id;
+
+      const qualifiedB = qualifiedTeams.find(q => q.placeholder === m.teamB);
+      if (qualifiedB) update.teamB = qualifiedB.id;
+
+      if (Object.keys(update).length > 0) {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', m.id), update);
+        updatesCount++;
+      }
+    }
+
+    // 3. Update Next Stage Settings (Persist Qualified Teams)
+    if (nextStage && nextStage.type === 'league') {
+      const qualifiedIds = qualifiedTeams.map(q => q.id);
+      const updatedStages = stages.map(s => {
+        if (s.id === nextStage.id) {
+          return {
+            ...s,
+            settings: {
+              ...s.settings,
+              teams: qualifiedIds
+            }
+          };
+        }
+        return s;
+      });
+
+      const newConfig = { ...config, stages: updatedStages };
+      updateConfig(newConfig);
+    }
+
+    alert(`Stage Complete! Updated ${updatesCount} upcoming matches and promoted ${qualifiedTeams.length} teams.`);
   };
 
   const handleStartMatchClick = (match) => {
@@ -1486,7 +1623,7 @@ const AdminDashboard = ({
 
                   {/* STAGE BUILDER */}
                   <div className="bg-slate-900/80 p-6 rounded-xl border border-white/5">
-                    <StageBuilder config={localConfig} updateConfig={setLocalConfig} />
+                    <StageBuilder config={localConfig} updateConfig={setLocalConfig} completeStage={completeStage} />
                   </div>
                   {/* Legacy Config Hidden */}
                   <div className="hidden">
@@ -1715,13 +1852,11 @@ export default function App() {
         // but we want to trigger scheduling *now*.
         // Let's pass the *anticipated* new matches state?
         // Actually, let's just wait a tick or call it with the knowledge of this match finishing.
-        setTimeout(() => {
-          // We need to fetch latest matches or use current + update.
-          // Since we don't have easy access to "latest from DB" here without listening,
-          // we will construct a temporary matches array with this match updated.
-          const updatedMatches = matches.map(m => m.id === match.id ? { ...m, ...updates } : m);
-          checkAndScheduleNextStage(updatedMatches, teams, standings, db, appId, config);
-        }, 1000);
+        // Auto-Schedule Hook REMOVED per user request (Manual Stage control now)
+        // setTimeout(() => {
+        //   const updatedMatches = matches.map(m => m.id === match.id ? { ...m, ...updates } : m);
+        //   checkAndScheduleNextStage(updatedMatches, teams, standings, db, appId, config);
+        // }, 1000);
       } else {
         // Only create new set if match not finished and max sets not reached
         updates.scores = [...currentScores, { a: 0, b: 0 }];
@@ -1769,8 +1904,8 @@ export default function App() {
           if (teamSets > oppSets) leaguePoints += 2;
         });
 
-        const setRatio = setsLost === 0 ? setsWon : setsWon / setsLost;
-        const pointRatio = pointsLost === 0 ? pointsWon : pointsWon / pointsLost;
+        const setRatio = setsLost === 0 ? (setsWon > 0 ? Infinity : 0) : setsWon / setsLost;
+        const pointRatio = pointsLost === 0 ? (pointsWon > 0 ? Infinity : 0) : pointsWon / pointsLost;
 
         return {
           ...team,
@@ -1804,7 +1939,30 @@ export default function App() {
     stages.forEach(stage => {
       if (stage.type === 'league') {
         const stageTeamIds = stage.settings?.teams || []; // Teams in this league
-        const stageTeams = teams.filter(t => stageTeamIds.includes(t.id));
+        let stageTeams = teams.filter(t => stageTeamIds.includes(t.id));
+
+        // Fallback: If no teams assigned (pre-qualification), show Placeholders
+        if (stageTeams.length === 0) {
+          const prevStage = stages[stages.indexOf(stage) - 1];
+          let placeholders = [];
+          if (prevStage?.type === 'group') {
+            const numGroups = prevStage.settings?.numGroups || 2;
+            const qualifiers = stage.settings?.qualifiersFromPrev || 2;
+            for (let g = 0; g < numGroups; g++) {
+              const groupChar = String.fromCharCode(65 + g);
+              for (let q = 1; q <= qualifiers; q++) placeholders.push(`${groupChar}${q}`);
+            }
+          } else {
+            const num = stage.settings?.qualifiersFromPrev || 4;
+            for (let i = 1; i <= num; i++) placeholders.push(`Rank ${i}`);
+          }
+
+          stageTeams = placeholders.map(p => ({
+            id: p,
+            name: p,
+            color: 'bg-slate-800' // Placeholder color
+          }));
+        }
 
         let relevantMatches = matches.filter(m => m.stageId === stage.id);
 
