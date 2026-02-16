@@ -246,7 +246,14 @@ const RoadmapView = ({ teams, matches, config, standings }) => {
                       <span className="text-[10px] font-bold text-green-400 mb-1 block">RANK 1 (Direct Final)</span>
                       <GlassCard className="p-2 w-32 border-l-4 border-green-500 bg-green-900/20">
                         <div className="text-xs font-bold text-white">
-                          {getTeamName('Rank 1')}
+                          {(() => {
+                            // Dynamic Lookup: Find the Final match and get Team A (Rank 1 spot)
+                            const finalMatch = matches.find(m => m.matchName === 'Final');
+                            if (finalMatch && finalMatch.teamA && !finalMatch.teamA.startsWith('PLACEHOLDER')) {
+                              return getTeamName(finalMatch.teamA);
+                            }
+                            return getTeamName('Rank 1');
+                          })()}
                         </div>
                       </GlassCard>
                     </div>
@@ -1155,7 +1162,8 @@ const AdminDashboard = ({
     }
     else if (stage.type === 'league') {
       const table = standings[stage.id] || standings.superStage || [];
-      const qualifiers = (nextStage?.type === 'knockout' ? 4 : (stage.settings.qualifiersFromPrev || 4));
+      // Use configured qualifiers or default to 4 (or 3 if user requested)
+      const qualifiers = (nextStage?.type === 'knockout' ? (config.roadmap?.qualificationCount || 4) : (stage.settings.qualifiersFromPrev || 4));
 
       const top = table.slice(0, qualifiers);
       qualifiedTeams.push(...top.map((t, i) => ({
