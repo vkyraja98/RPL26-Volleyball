@@ -696,7 +696,7 @@ const AdminScorer = ({ match, teams = [], config, handleScore, setView, updateDo
 // --- Admin Dashboard ---
 const AdminDashboard = ({
   teams, matches, players, config, updateConfig, setIsAdmin, setView,
-  adminTab, setAdminTab, createFixture, startMatch, deleteDoc, addDoc, updateDoc, db, appId, standings
+  adminTab, setAdminTab, createFixture, startMatch, deleteDoc, addDoc, updateDoc, db, appId, standings, generatePlayoffs
 }) => {
   const [newItem, setNewItem] = useState('');
   const [newPlayer, setNewPlayer] = useState({ name: '', teamId: '', isCaptain: false });
@@ -1528,6 +1528,57 @@ export default function App() {
   }, [teams, matches, config.roadmap, players]);
 
 
+  const generatePlayoffs = async () => {
+    // Determine qualified teams from Super Stage
+    const qualifiedTeams = standings.superStage.slice(0, config.roadmap?.qualificationCount || 4);
+    if (qualifiedTeams.length < 3) {
+      alert("Not enough qualified teams to generate playoffs!");
+      return;
+    }
+
+    if (config.roadmap?.playoffType === 'eliminator') {
+      // WPL Format: 
+      // 1. Eliminator: Rank 2 vs Rank 3
+      // 2. Final: Rank 1 vs Winner of Eliminator
+
+      const rank1 = qualifiedTeams[0];
+      const rank2 = qualifiedTeams[1];
+      const rank3 = qualifiedTeams[2];
+
+      await createFixture({
+        teamA: rank2.id,
+        teamB: rank3.id,
+        date: new Date().toISOString().split('T')[0],
+        time: '18:00',
+        stage: 'playoff',
+        matchName: 'Eliminator'
+      });
+
+      await createFixture({
+        teamA: rank1.id,
+        teamB: 'PLACEHOLDER:ELIM:Winner', // Placeholder logic needed in StartMatch/Scorer to resolve or just manual
+        date: new Date().toISOString().split('T')[0],
+        time: '20:00',
+        stage: 'final',
+        matchName: 'Final'
+      });
+
+      alert("Generated WPL Style Playoffs: Eliminator & Final (Placeholder).");
+
+    } else {
+      // Standard Semis
+      // 1 vs 4, 2 vs 3
+      if (qualifiedTeams.length < 4) { alert("Need 4 teams for Standard Semis"); return; }
+
+      await createFixture({ teamA: qualifiedTeams[0].id, teamB: qualifiedTeams[3].id, date: new Date().toISOString().split('T')[0], time: '18:00', stage: 'semis', matchName: 'Semi Final 1' });
+      await createFixture({ teamA: qualifiedTeams[1].id, teamB: qualifiedTeams[2].id, date: new Date().toISOString().split('T')[0], time: '20:00', stage: 'semis', matchName: 'Semi Final 2' });
+      alert("Generated Standard Semi Finals.");
+    }
+
+    // Update Stage
+    updateConfig({ ...config, roadmap: { ...config.roadmap, currentStage: 'playoff' } });
+  };
+
   // --- Sub-Components ---
   const PublicView = () => {
     const [expandedTeamId, setExpandedTeamId] = useState(null);
@@ -1861,7 +1912,7 @@ export default function App() {
           <AdminDashboard
             teams={teams} matches={matches} players={players} config={config} updateConfig={updateConfig}
             setIsAdmin={setIsAdmin} setView={setView} adminTab={adminTab} setAdminTab={setAdminTab}
-            createFixture={createFixture} startMatch={startMatch} deleteDoc={deleteDoc} addDoc={addDoc} updateDoc={updateDoc} db={db} appId={appId} standings={standings}
+            createFixture={createFixture} startMatch={startMatch} deleteDoc={deleteDoc} addDoc={addDoc} updateDoc={updateDoc} db={db} appId={appId} standings={standings} generatePlayoffs={generatePlayoffs}
           />}
       </div>
     </ErrorBoundary>
