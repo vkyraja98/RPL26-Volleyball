@@ -1799,7 +1799,6 @@ export default function App() {
                       </GlassCard>
                     );
                   });
-                });
                 })()}
 
                 {/* SUPER STAGE TABLE API */}
