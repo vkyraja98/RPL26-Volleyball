@@ -934,17 +934,18 @@ const AdminDashboard = ({
   };
 
   /* --- AUTO SCHEDULER (Dynamic) --- */
-  const generateFixtures = async () => {
+  const generateFixtures = async (targetStageId) => {
     let newMatches = [];
     const stages = config.stages || [];
     if (stages.length === 0) return alert("No stages configured! Please configure roadmap first.");
 
-    // 1. Group Stage (Stage 1) - Real Matches
-    const groupStage = stages.find(s => s.type === 'group');
-    if (groupStage) {
+    // FILTER BY TARGET
+    const targetStage = stages.find(s => s.id === targetStageId);
+    if (!targetStage) return alert("Please select a stage to generate matches for.");
+
+    // 1. Group Stage
+    if (targetStage.type === 'group') {
       const groups = {};
-      // Assign teams to groups if not already (or just read them)
-      // For generation, we assume teams have 'group' property set 'A', 'B', etc.
       teams.forEach(t => {
         const g = t.group || 'A';
         if (!groups[g]) groups[g] = [];
@@ -960,7 +961,7 @@ const AdminDashboard = ({
               date: new Date().toISOString().split('T')[0],
               time: '18:00',
               stage: `Group ${groupName}`,
-              stageId: groupStage.id,
+              stageId: targetStage.id,
               matchName: `Group ${groupName} Match`,
               status: 'scheduled'
             });
@@ -969,123 +970,102 @@ const AdminDashboard = ({
       });
     }
 
-    // 2. Future Stages (Placeholders)
-    stages.forEach((stage, idx) => {
-      if (stage.type === 'group') return; // Handled above
+    // 2. League / Super Six (Top N from Groups)
+    if (targetStage.type === 'league') {
+      const prevStage = stages[stages.indexOf(targetStage) - 1];
+      let placeholders = [];
 
-      const prevStage = stages[idx - 1];
-      if (!prevStage) return;
+      if (prevStage.type === 'group') {
+        // LOGIC: Top N from EACH Group (A1, A2, B1, B2...)
+        const numGroups = prevStage.settings.numGroups || 2;
+        const qualifiers = targetStage.settings.qualifiersFromPrev || 2;
 
-      if (stage.type === 'league') {
-        // IMPROVED PLACEHOLDERS
-        let placeholders = [];
-
-        if (prevStage.type === 'group') {
-          // Interleave: A1, B1, A2, B2...
-          const numGroups = prevStage.settings.numGroups || 2;
-          const qualifiers = stage.settings.qualifiersFromPrev || 2;
+        for (let g = 0; g < numGroups; g++) {
+          const groupChar = String.fromCharCode(65 + g);
           for (let q = 1; q <= qualifiers; q++) {
-            for (let g = 0; g < numGroups; g++) {
-              const groupChar = String.fromCharCode(65 + g);
-              placeholders.push(`${groupChar}${q}`);
-            }
-          }
-        } else if (prevStage.type === 'league') {
-          // Rank 1, Rank 2...
-          const numQualifiers = (stage.settings.qualifiersFromPrev || 4);
-          for (let i = 1; i <= numQualifiers; i++) placeholders.push(`Rank ${i}`);
-        } else {
-          // Fallback
-          const num = (stage.settings.qualifiersFromPrev || 2) * 2;
-          placeholders = Array.from({ length: num }, (_, i) => `TBA ${i + 1}`);
-        }
-
-        if (stage.settings.matchType === 'round_robin') {
-          for (let i = 0; i < placeholders.length; i++) {
-            for (let j = i + 1; j < placeholders.length; j++) {
-              newMatches.push({
-                teamA: placeholders[i],
-                teamB: placeholders[j],
-                date: new Date().toISOString().split('T')[0],
-                time: '20:00',
-                stage: stage.name, // "Super Six"
-                stageId: stage.id,
-                matchName: `${stage.name} Match`,
-                isPlaceholder: true,
-                status: 'draft' // CHANGED: Default to draft for intermediate leagues so admin can choose
-              });
-            }
+            placeholders.push(`${groupChar}${q}`);
           }
         }
+        // Now we have [A1, A2, B1, B2, C1, C2]
+      } else {
+        // Fallback to Rank based
+        const num = (targetStage.settings.qualifiersFromPrev || 4);
+        for (let i = 1; i <= num; i++) placeholders.push(`Rank ${i}`);
       }
 
-      if (stage.type === 'knockout') {
-        const format = stage.settings.format || 'standard';
-
-        if (format === 'wpl_eliminator') {
-          // Eliminator (2 vs 3)
+      // Generate ALL Round Robin matches as DRAFTS
+      for (let i = 0; i < placeholders.length; i++) {
+        for (let j = i + 1; j < placeholders.length; j++) {
           newMatches.push({
-            teamA: 'Rank 2',
-            teamB: 'Rank 3',
-            date: new Date().toISOString().split('T')[0],
-            time: '18:00',
-            stage: stage.name,
-            stageId: stage.id,
-            matchName: 'Eliminator',
-            status: 'scheduled'
-          });
-          // Final (1 vs Winner Eliminator)
-          newMatches.push({
-            teamA: 'Rank 1',
-            teamB: 'Winner Eliminator',
+            teamA: placeholders[i],
+            teamB: placeholders[j],
             date: new Date().toISOString().split('T')[0],
             time: '20:00',
-            stage: 'Final',
-            stageId: stage.id,
-            matchName: 'Final',
-            status: 'scheduled'
+            stage: targetStage.name,
+            stageId: targetStage.id,
+            matchName: `${targetStage.name} Match`,
+            isPlaceholder: true,
+            status: 'draft' // Manual selection required
           });
         }
-        else if (format === 'standard') {
-          // Smart Semis
-          if (prevStage.type === 'group' && prevStage.settings.numGroups === 2) {
-            // A1 vs B2, B1 vs A2
-            newMatches.push({ teamA: 'A1', teamB: 'B2', stage: stage.name, matchName: 'Semi Final 1', stageId: stage.id, date: new Date().toISOString().split('T')[0], time: '18:00', status: 'scheduled' });
-            newMatches.push({ teamA: 'B1', teamB: 'A2', stage: stage.name, matchName: 'Semi Final 2', stageId: stage.id, date: new Date().toISOString().split('T')[0], time: '20:00', status: 'scheduled' });
-          } else {
-            // Rank 1 vs 4, Rank 2 vs 3
-            newMatches.push({ teamA: 'Rank 1', teamB: 'Rank 4', stage: stage.name, matchName: 'Semi Final 1', stageId: stage.id, date: new Date().toISOString().split('T')[0], time: '18:00', status: 'scheduled' });
-            newMatches.push({ teamA: 'Rank 2', teamB: 'Rank 3', stage: stage.name, matchName: 'Semi Final 2', stageId: stage.id, date: new Date().toISOString().split('T')[0], time: '20:00', status: 'scheduled' });
-          }
-
-          newMatches.push({ teamA: 'Winner SF1', teamB: 'Winner SF2', stage: 'Final', matchName: 'Final', stageId: stage.id, date: new Date().toISOString().split('T')[0], time: '21:00', status: 'scheduled' });
-        }
-        else if (format === 'ipl') {
-          // Qualifier 1 (1 vs 2)
-          newMatches.push({ teamA: 'Rank 1', teamB: 'Rank 2', stage: stage.name, matchName: 'Qualifier 1', stageId: stage.id, date: new Date().toISOString().split('T')[0], time: '18:00', status: 'scheduled' });
-          // Eliminator (3 vs 4)
-          newMatches.push({ teamA: 'Rank 3', teamB: 'Rank 4', stage: stage.name, matchName: 'Eliminator', stageId: stage.id, date: new Date().toISOString().split('T')[0], time: '20:00', status: 'scheduled' });
-          // Qualifier 2 (Loser Q1 vs Winner Elim)
-          newMatches.push({ teamA: 'Loser Q1', teamB: 'Winner Elim', stage: stage.name, matchName: 'Qualifier 2', stageId: stage.id, date: new Date().toISOString().split('T')[0], time: '18:00', status: 'scheduled' });
-          // Final (Winner Q1 vs Winner Q2)
-          newMatches.push({ teamA: 'Winner Q1', teamB: 'Winner Q2', stage: 'Final', matchName: 'Final', stageId: stage.id, date: new Date().toISOString().split('T')[0], time: '20:00', status: 'scheduled' });
-        }
       }
-    });
+    }
 
-    if (confirm(`Generate ${newMatches.length} Matches (including placeholders for future rounds)? This will wipe existing matches if you agree.`)) {
-      // Clear existing matches handled by caller usually, but here we append??
-      // The prompt says "wipe existing". Ideally we should wipe.
-      // For this implementation, let's assume the user knows.
-      // In production we would batch delete.
-      // Here we just add new ones for simplicity as per previous code.
-      // WARNING: This appends. Previous code comment said "This will wipe...".
-      // We should probably clear matches state or delete collection.
-      // Since we don't have delete collection handy, we just append and rely on user clearing or overwriting logic elsewhere?
-      // Actually usually we should just setMatches([]).
-      // But we are in a function. We can't setMatches easily unless we passed it.
-      // We are writing to DB.
-      // Let's just create them.
+    // 3. Knockout
+    if (targetStage.type === 'knockout') {
+      const format = targetStage.settings.format || 'standard';
+
+      if (format === 'wpl_eliminator') {
+        // Eliminator (2 vs 3)
+        newMatches.push({
+          teamA: 'Rank 2',
+          teamB: 'Rank 3',
+          date: new Date().toISOString().split('T')[0],
+          time: '18:00',
+          stage: targetStage.name,
+          stageId: targetStage.id,
+          matchName: 'Eliminator',
+          status: 'draft'
+        });
+        // Final (1 vs Winner Eliminator)
+        newMatches.push({
+          teamA: 'Rank 1',
+          teamB: 'Winner Eliminator',
+          date: new Date().toISOString().split('T')[0],
+          time: '20:00',
+          stage: 'Final',
+          stageId: targetStage.id,
+          matchName: 'Final',
+          status: 'draft'
+        });
+      }
+      else if (format === 'standard') {
+        // Smart Semis
+        if (stages[stages.indexOf(targetStage) - 1]?.type === 'group' && stages[stages.indexOf(targetStage) - 1]?.settings?.numGroups === 2) {
+          // A1 vs B2, B1 vs A2
+          newMatches.push({ teamA: 'A1', teamB: 'B2', stage: targetStage.name, matchName: 'Semi Final 1', stageId: targetStage.id, date: new Date().toISOString().split('T')[0], time: '18:00', status: 'draft' });
+          newMatches.push({ teamA: 'B1', teamB: 'A2', stage: targetStage.name, matchName: 'Semi Final 2', stageId: targetStage.id, date: new Date().toISOString().split('T')[0], time: '20:00', status: 'draft' });
+        } else {
+          // Rank 1 vs 4, Rank 2 vs 3
+          newMatches.push({ teamA: 'Rank 1', teamB: 'Rank 4', stage: targetStage.name, matchName: 'Semi Final 1', stageId: targetStage.id, date: new Date().toISOString().split('T')[0], time: '18:00', status: 'draft' });
+          newMatches.push({ teamA: 'Rank 2', teamB: 'Rank 3', stage: targetStage.name, matchName: 'Semi Final 2', stageId: targetStage.id, date: new Date().toISOString().split('T')[0], time: '20:00', status: 'draft' });
+        }
+
+        newMatches.push({ teamA: 'Winner SF1', teamB: 'Winner SF2', stage: 'Final', matchName: 'Final', stageId: targetStage.id, date: new Date().toISOString().split('T')[0], time: '21:00', status: 'draft' });
+      }
+      else if (format === 'ipl') {
+        // Qualifier 1 (1 vs 2)
+        newMatches.push({ teamA: 'Rank 1', teamB: 'Rank 2', stage: targetStage.name, matchName: 'Qualifier 1', stageId: targetStage.id, date: new Date().toISOString().split('T')[0], time: '18:00', status: 'draft' });
+        // Eliminator (3 vs 4)
+        newMatches.push({ teamA: 'Rank 3', teamB: 'Rank 4', stage: targetStage.name, matchName: 'Eliminator', stageId: targetStage.id, date: new Date().toISOString().split('T')[0], time: '20:00', status: 'draft' });
+        // Qualifier 2 (Loser Q1 vs Winner Elim)
+        newMatches.push({ teamA: 'Loser Q1', teamB: 'Winner Elim', stage: targetStage.name, matchName: 'Qualifier 2', stageId: targetStage.id, date: new Date().toISOString().split('T')[0], time: '18:00', status: 'draft' });
+        // Final (Winner Q1 vs Winner Q2)
+        newMatches.push({ teamA: 'Winner Q1', teamB: 'Winner Q2', stage: 'Final', matchName: 'Final', stageId: targetStage.id, date: new Date().toISOString().split('T')[0], time: '20:00', status: 'draft' });
+      }
+    }
+
+    if (confirm(`Generate ${newMatches.length} Matches for ${targetStage.name}?`)) {
       newMatches.forEach(m => createFixture(m));
       alert("Fixtures Generated!");
     }
@@ -1170,15 +1150,17 @@ const AdminDashboard = ({
                   <div className="flex justify-between items-center mb-6">
                     <h3 className="font-bold text-lg text-white">{fixture.id ? 'Edit Match' : 'Schedule New Match'}</h3>
                     <div className="flex gap-2">
-                      {!fixture.id && config.tournamentType === 'group' && (
-                        <select className="bg-slate-800 text-white text-xs p-2 rounded" value={numGroups} onChange={e => setNumGroups(parseInt(e.target.value))}>
-                          <option value={2}>2 Groups</option>
-                          <option value={3}>3 Groups</option>
-                          <option value={4}>4 Groups</option>
-                        </select>
+                      {config.tournamentType === 'group' && !fixture.id && (
+                        <div className="flex items-center gap-2">
+                          <select className="bg-slate-800 text-white text-xs p-2 rounded" onChange={(e) => {
+                            if (e.target.value) generateFixtures(e.target.value);
+                            e.target.value = ''; // Reset
+                          }}>
+                            <option value="">Generate Schedule For...</option>
+                            {config.stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                          </select>
+                        </div>
                       )}
-                      {!fixture.id && <button onClick={generateFixtures} className="text-xs bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded font-bold uppercase tracking-wider">Auto-Generate Fixtures</button>}
-                      {!fixture.id && <button onClick={() => checkAndScheduleNextStage(matches, teams, standings, db, appId, config)} className="text-xs bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded font-bold uppercase tracking-wider">Check Auto-Schedule</button>}
                       {fixture.id && <button onClick={() => setFixture({ ta: '', tb: '', d: '', t: '', stage: 'league' })} className="text-xs bg-slate-600 hover:bg-slate-500 text-white px-3 py-2 rounded font-bold uppercase tracking-wider">Cancel Edit</button>}
                     </div>
                   </div>
@@ -1285,21 +1267,44 @@ const AdminDashboard = ({
                     <h3 className="font-bold text-lg text-white">Manage Teams</h3>
                     <div className="flex gap-2">
                       {config.tournamentType === 'group' && (
-                        <button
-                          onClick={() => {
-                            if (!confirm("This will shuffle all teams into groups randomly. Continue?")) return;
-                            const shuffled = shuffleArray([...teams]);
-                            const groups = Array.from({ length: numGroups }, (_, i) => String.fromCharCode(65 + i)); // ['A', 'B', ...]
-                            shuffled.forEach((team, idx) => {
-                              const group = groups[idx % numGroups];
-                              updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teams', team.id), { group });
-                            });
-                            alert("Teams assigned to groups randomly!");
-                          }}
-                          className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded font-bold uppercase tracking-wider text-xs"
-                        >
-                          Random Group Gen
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              if (!confirm("This will shuffle teams and assign IDs (A1, A2..). Continue?")) return;
+                              const shuffled = shuffleArray([...teams]);
+                              const numGroups = config.stages.find(s => s.type === 'group')?.settings?.numGroups || 2;
+                              const groups = Array.from({ length: numGroups }, (_, i) => String.fromCharCode(65 + i)); // ['A', 'B', ...]
+
+                              // Distribute
+                              shuffled.forEach((team, idx) => {
+                                const groupIndex = idx % numGroups;
+                                const group = groups[groupIndex];
+                                // Calc index within group (1-based)
+                                // We need to count how many assigned to this group so far?
+                                // Simpler: just assign, then re-calc IDs in a second pass? 
+                                // Or tracking counts.
+                                // Let's simplify:
+                              });
+
+                              // Better approach:
+                              let groupCounts = new Array(numGroups).fill(0);
+                              shuffled.forEach((team, idx) => {
+                                const gIdx = idx % numGroups;
+                                groupCounts[gIdx]++;
+                                const group = String.fromCharCode(65 + gIdx);
+                                const idInGroup = group + groupCounts[gIdx]; // A1, B1, A2, B2...
+                                updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teams', team.id), {
+                                  group,
+                                  teamId: idInGroup // New field for display ID
+                                });
+                              });
+                              alert("Teams assigned to groups with IDs (A1, B1...)!");
+                            }}
+                            className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded font-bold uppercase tracking-wider text-xs"
+                          >
+                            Auto-Assign Groups & IDs
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1457,6 +1462,16 @@ const AdminDashboard = ({
                   </div>
 
                   <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Number of Teams</label>
+                    <input
+                      type="number"
+                      className="w-full p-3 bg-slate-800 border border-slate-700 rounded text-white focus:border-blue-500 outline-none"
+                      value={localConfig.numTeams || 8}
+                      onChange={e => setLocalConfig({ ...localConfig, numTeams: parseInt(e.target.value) })}
+                    />
+                  </div>
+
+                  <div>
                     <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Tournament Type</label>
                     <select
                       className="w-full p-3 bg-slate-800 border border-slate-700 rounded text-white focus:border-blue-500 outline-none"
@@ -1468,27 +1483,6 @@ const AdminDashboard = ({
                       <option value="group">Group Stage</option>
                     </select>
                   </div>
-
-                  {/* Match Rules (Global) */}
-                  <div className="bg-slate-900/50 p-4 rounded-lg border border-white/5">
-                    <h4 className="text-yellow-400 font-bold mb-4 uppercase tracking-wider text-sm">Match Rules</h4>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Sets</label>
-                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules?.league?.sets || 3} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, league: { ...(localConfig.matchRules?.league || {}), sets: parseInt(e.target.value) } } })} />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Points</label>
-                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules?.league?.points || 25} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, league: { ...(localConfig.matchRules?.league || {}), points: parseInt(e.target.value) } } })} />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tie-Break</label>
-                        <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules?.league?.tieBreak || 15} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, league: { ...(localConfig.matchRules?.league || {}), tieBreak: parseInt(e.target.value) } } })} />
-                      </div>
-                    </div>
-                  </div>
-
-
 
                   {/* STAGE BUILDER */}
                   <div className="bg-slate-900/80 p-6 rounded-xl border border-white/5">
