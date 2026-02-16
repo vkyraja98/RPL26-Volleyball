@@ -1829,34 +1829,51 @@ export default function App() {
       updates.setsB = newSetsB;
 
       const setsNeededToWin = Math.ceil(stageRules.sets / 2);
+      let matchWinner = null;
+
       if (newSetsA === setsNeededToWin) {
         updates.status = 'finished';
         updates.winner = match.teamA;
+        matchWinner = match.teamA;
         setTimeout(() => setView('admin-dashboard'), 2000);
       } else if (newSetsB === setsNeededToWin) {
         updates.status = 'finished';
         updates.winner = match.teamB;
+        matchWinner = match.teamB;
         setTimeout(() => setView('admin-dashboard'), 2000);
       }
-      if (newSetsA > (stageRules.sets / 2) || newSetsB > (stageRules.sets / 2)) {
-        const winner = newSetsA > newSetsB ? match.teamA : match.teamB;
-        updates.status = 'finished';
-        updates.winner = winner;
-        alert(`Match Finished! Winner: ${winner === match.teamA ? 'Team A' : 'Team B'}`);
 
-        // Auto-Schedule Hook
-        // We need to wait for the update to propagate or pass the new state
-        // passing updated matches list would be ideal, but here we just trigger it.
-        // The helper needs the *latest* data. Since we are updating firestore,
-        // we can assume firestore update will trigger a re-render/re-fetch,
-        // but we want to trigger scheduling *now*.
-        // Let's pass the *anticipated* new matches state?
-        // Actually, let's just wait a tick or call it with the knowledge of this match finishing.
-        // Auto-Schedule Hook REMOVED per user request (Manual Stage control now)
-        // setTimeout(() => {
-        //   const updatedMatches = matches.map(m => m.id === match.id ? { ...m, ...updates } : m);
-        //   checkAndScheduleNextStage(updatedMatches, teams, standings, db, appId, config);
-        // }, 1000);
+      if (matchWinner) {
+        alert(`Match Finished! Winner: ${matchWinner === match.teamA ? 'Team A' : 'Team B'}`);
+
+        // --- INTRA-STAGE PROGRESSION (Eliminator -> Final) ---
+        // Check if this match feeds into another match in the SAME stage (or next)
+        const dependentMatches = matches.filter(m =>
+          (m.teamA?.startsWith('PLACEHOLDER') || m.teamB?.startsWith('PLACEHOLDER')) &&
+          m.status !== 'finished'
+        );
+
+        dependentMatches.forEach(dm => {
+          let dmUpdate = {};
+          // WPL Eliminator Logic
+          if (match.matchName === 'Eliminator' && dm.matchName === 'Final') {
+            if (dm.teamA === 'PLACEHOLDER:ELIM:Winner') dmUpdate.teamA = matchWinner;
+            if (dm.teamB === 'PLACEHOLDER:ELIM:Winner') dmUpdate.teamB = matchWinner;
+          }
+          // Standard Semis Logic
+          if (match.matchName === 'Semi Final 1') {
+            if (dm.teamA === 'Winner SF1') dmUpdate.teamA = matchWinner;
+            if (dm.teamB === 'Winner SF1') dmUpdate.teamB = matchWinner;
+          }
+          if (match.matchName === 'Semi Final 2') {
+            if (dm.teamA === 'Winner SF2') dmUpdate.teamA = matchWinner;
+            if (dm.teamB === 'Winner SF2') dmUpdate.teamB = matchWinner;
+          }
+
+          if (Object.keys(dmUpdate).length > 0) {
+            updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', dm.id), dmUpdate);
+          }
+        });
       } else {
         // Only create new set if match not finished and max sets not reached
         updates.scores = [...currentScores, { a: 0, b: 0 }];
@@ -1904,8 +1921,8 @@ export default function App() {
           if (teamSets > oppSets) leaguePoints += 2;
         });
 
-        const setRatio = setsLost === 0 ? (setsWon > 0 ? Infinity : 0) : setsWon / setsLost;
-        const pointRatio = pointsLost === 0 ? (pointsWon > 0 ? Infinity : 0) : pointsWon / pointsLost;
+        const setRatio = setsLost === 0 ? (setsWon > 0 ? 'MAX' : 0) : setsWon / setsLost;
+        const pointRatio = pointsLost === 0 ? (pointsWon > 0 ? 'MAX' : 0) : pointsWon / pointsLost;
 
         return {
           ...team,
@@ -2359,7 +2376,7 @@ export default function App() {
                               </td>
                               <td className="p-5 text-center text-slate-400">{team.played}</td>
                               <td className="p-5 text-center text-slate-300">{team.won}/{team.lost}</td>
-                              <td className="p-5 text-center text-slate-500 text-xs">{team.setRatio.toFixed(2)}</td>
+                              <td className="p-5 text-center text-slate-500 text-xs">{typeof team.setRatio === 'string' ? team.setRatio : team.setRatio.toFixed(2)}</td>
                               <td className="p-5 text-center font-black text-blue-400">{team.leaguePoints}</td>
                             </tr>
                           );
