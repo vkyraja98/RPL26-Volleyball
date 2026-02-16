@@ -166,7 +166,7 @@ const Badge = ({ status }) => {
 // --- Roadmap View (Bracket Style) ---
 const RoadmapView = ({ teams, matches, config, standings }) => {
   const groups = config.tournamentType === 'group'
-    ? [...new Set(standings.map(s => s.group || 'A'))].sort()
+    ? [...new Set(standings.all.map(s => s.group || 'A'))].sort()
     : ['League'];
 
   // Helper to find a match by stage or name
@@ -178,7 +178,7 @@ const RoadmapView = ({ teams, matches, config, standings }) => {
 
   const getQualifierName = (group, position) => {
     if (!isLeagueFinished) return `${group}${position}`;
-    const sortedGroup = standings.filter(s => (s.group || 'A') === group).sort((a, b) => a.rank - b.rank); // Pre-sorted in main standings, filtering preserves order
+    const sortedGroup = standings.all.filter(s => (s.group || 'A') === group).sort((a, b) => a.rank - b.rank); // Pre-sorted in main standings, filtering preserves order
     return sortedGroup[position - 1]?.name || 'TBD';
   };
 
