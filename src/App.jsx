@@ -68,7 +68,8 @@ const DEFAULT_CONFIG = {
   matchRules: {
     league: { sets: 3, points: 25, tieBreak: 15 },
     semis: { sets: 5, points: 25, tieBreak: 15 },
-    final: { sets: 5, points: 25, tieBreak: 15 }
+    final: { sets: 5, points: 25, tieBreak: 15 },
+    playoff: { sets: 3, points: 25, tieBreak: 15 }
   },
   stages: [
     {
@@ -2042,9 +2043,10 @@ export default function App() {
 
     console.log(`Match ${match.id} Rules [Stage: ${match.stage}]:`, stageRules);
 
-    const rulesSets = parseInt(stageRules.sets || 3);
-    const rulesPoints = parseInt(stageRules.points || 25);
-    const rulesTieBreak = parseInt(stageRules.tieBreak || 15);
+    // ROBUST PARSING: Ensure we never get NaN
+    const rulesSets = parseInt(stageRules.sets || 3) || 3;
+    const rulesPoints = parseInt(stageRules.points || 25) || 25;
+    const rulesTieBreak = parseInt(stageRules.tieBreak || 15) || 15;
 
     const setsToWin = Math.ceil(rulesSets / 2);
 
