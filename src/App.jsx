@@ -2272,12 +2272,12 @@ export default function App() {
                               <th className="p-5 text-center">W-L</th>
                               <th className="p-5 text-center hidden sm:table-cell">Set Ratio</th>
                               <th className="p-5 text-center hidden sm:table-cell">Point Ratio</th>
-                              <th className="p-5 text-center hidden sm:table-cell">Squad Size</th>
+
                               <th className="p-5 text-center bg-white/5 text-blue-300">PTS</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-white/5">
-                            {groupStandings.length === 0 && <tr><td colSpan="8" className="p-8 text-center text-slate-500 italic">No teams registered</td></tr>}
+                            {groupStandings.length === 0 && <tr><td colSpan="7" className="p-8 text-center text-slate-500 italic">No teams registered</td></tr>}
                             {groupStandings.map((team, idx) => {
                               const isQualified = config.tournamentType === 'group' && idx < (config.roadmap?.qualifiers || 2);
                               return (
@@ -2307,9 +2307,7 @@ export default function App() {
                                     <td className="p-5 text-center font-mono text-sm hidden sm:table-cell text-slate-400">
                                       {typeof team.pointRatio === 'string' ? team.pointRatio : team.pointRatio.toFixed(3)}
                                     </td>
-                                    <td className="p-5 text-center font-mono text-sm hidden sm:table-cell text-slate-400">
-                                      {team.squadSize}
-                                    </td>
+
                                     <td className="p-5 text-center bg-white/5">
                                       <span className="text-2xl font-black text-blue-400">{team.leaguePoints}</span>
                                     </td>
@@ -2317,7 +2315,7 @@ export default function App() {
                                   {/* Expanded Details */}
                                   {expandedTeamId === team.id && (
                                     <tr className="bg-slate-900/50 animate-fade-in text-sm">
-                                      <td colSpan="8" className="p-6 border-b border-white/5">
+                                      <td colSpan="7" className="p-6 border-b border-white/5">
                                         <div className="grid md:grid-cols-2 gap-8">
                                           <div>
                                             <h4 className="text-slate-400 font-bold uppercase tracking-wider mb-3 text-xs">Recent Results</h4>
@@ -2401,12 +2399,12 @@ export default function App() {
                             <th className="p-5 text-center">W-L</th>
                             <th className="p-5 text-center hidden sm:table-cell">Set Ratio</th>
                             <th className="p-5 text-center hidden sm:table-cell">Point Ratio</th>
-                            <th className="p-5 text-center hidden sm:table-cell">Squad Size</th>
+
                             <th className="p-5 text-center bg-white/5 text-blue-300">PTS</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
-                          {standings.superStage.length === 0 && <tr><td colSpan="8" className="p-8 text-center text-slate-500 italic">No teams qualified yet</td></tr>}
+                          {standings.superStage.length === 0 && <tr><td colSpan="7" className="p-8 text-center text-slate-500 italic">No teams qualified yet</td></tr>}
                           {standings.superStage.map((team, idx) => {
                             const superStage = config.stages.find(s => s.type === 'league');
                             const qualifyCount = superStage?.settings?.qualifiersFromPrev || config.roadmap?.qualificationCount || 4;
@@ -2438,9 +2436,7 @@ export default function App() {
                                   <td className="p-5 text-center font-mono text-sm hidden sm:table-cell text-slate-400">
                                     {typeof team.pointRatio === 'string' ? team.pointRatio : team.pointRatio.toFixed(3)}
                                   </td>
-                                  <td className="p-5 text-center font-mono text-sm hidden sm:table-cell text-slate-400">
-                                    {team.squadSize}
-                                  </td>
+
                                   <td className="p-5 text-center bg-white/5">
                                     <span className="text-2xl font-black text-blue-400">{team.leaguePoints}</span>
                                   </td>
@@ -2448,7 +2444,7 @@ export default function App() {
                                 {/* Expanded Details */}
                                 {expandedTeamId === team.id && (
                                   <tr className="bg-slate-900/50 animate-fade-in text-sm">
-                                    <td colSpan="8" className="p-6 border-b border-white/5">
+                                    <td colSpan="7" className="p-6 border-b border-white/5">
                                       <div className="grid md:grid-cols-2 gap-8">
                                         <div>
                                           <h4 className="text-slate-400 font-bold uppercase tracking-wider mb-3 text-xs">Recent Results</h4>
