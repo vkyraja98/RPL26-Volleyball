@@ -2397,37 +2397,108 @@ export default function App() {
                           <tr className="bg-white/5 text-slate-400 text-xs font-bold uppercase tracking-widest border-b border-white/10">
                             <th className="p-5">Rank</th>
                             <th className="p-5">Team</th>
-                            <th className="p-5 text-center">P</th>
-                            <th className="p-5 text-center">W/L</th>
-                            <th className="p-5 text-center">NRR/Ratio</th>
-                            <th className="p-5 text-center text-blue-300">PTS</th>
+                            <th className="p-5 text-center">Played</th>
+                            <th className="p-5 text-center">W-L</th>
+                            <th className="p-5 text-center hidden sm:table-cell">Set Ratio</th>
+                            <th className="p-5 text-center hidden sm:table-cell">Point Ratio</th>
+                            <th className="p-5 text-center hidden sm:table-cell">Squad Size</th>
+                            <th className="p-5 text-center bg-white/5 text-blue-300">PTS</th>
                           </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-white/5">
+                          {standings.superStage.length === 0 && <tr><td colSpan="8" className="p-8 text-center text-slate-500 italic">No teams qualified yet</td></tr>}
                           {standings.superStage.map((team, idx) => {
-                            // Dynamic Qualification Count from Stage Settings
                             const superStage = config.stages.find(s => s.type === 'league');
                             const qualifyCount = superStage?.settings?.qualifiersFromPrev || config.roadmap?.qualificationCount || 4;
                             const isQualified = idx < qualifyCount;
                             return (
-                              <tr key={team.id} className={`border-b border-white/5 ${isQualified ? 'bg-green-500/5' : ''}`}>
-                                <td className="p-5 font-mono text-slate-400">{idx + 1}</td>
-                                <td className="p-5 font-bold text-white flex items-center gap-2">
-                                  <div className={`w-3 h-3 rounded-full ${team.color}`} /> {team.name}
-                                  {isQualified && <CheckCircle2 size={12} className="text-green-500" />}
-                                </td>
-                                <td className="p-5 text-center text-slate-400">{team.played}</td>
-                                <td className="p-5 text-center text-slate-300">{team.won}/{team.lost}</td>
-                                <td className="p-5 text-center text-slate-500 text-xs">{typeof team.setRatio === 'string' ? team.setRatio : team.setRatio.toFixed(2)}</td>
-                                <td className="p-5 text-center font-black text-blue-400">{team.leaguePoints}</td>
-                              </tr>
+                              <React.Fragment key={team.id}>
+                                <tr onClick={() => setExpandedTeamId(expandedTeamId === team.id ? null : team.id)} className={`hover:bg-white/5 transition-colors group cursor-pointer ${isQualified ? 'bg-green-500/5' : ''}`}>
+                                  <td className="p-5 font-mono text-slate-500 font-bold w-16">{idx + 1}</td>
+                                  <td className="p-5">
+                                    <div className="flex items-center gap-4">
+                                      <div className={`w-10 h-10 rounded-lg ${team.color} flex items-center justify-center font-black text-white shadow-lg relative`}>
+                                        {team.name[0]}
+                                        {isQualified && <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-slate-900" title="Qualified" />}
+                                      </div>
+                                      <div>
+                                        <span className="font-bold text-lg text-white group-hover:text-blue-300 transition-colors">{team.name}</span>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="p-5 text-center font-mono text-slate-300">{team.played}</td>
+                                  <td className="p-5 text-center font-mono">
+                                    <span className="text-green-400 font-bold">{team.won}</span>
+                                    <span className="text-slate-600 mx-1">/</span>
+                                    <span className="text-red-400 font-bold">{team.lost}</span>
+                                  </td>
+                                  <td className="p-5 text-center font-mono text-sm hidden sm:table-cell text-slate-400">
+                                    {typeof team.setRatio === 'string' ? team.setRatio : team.setRatio.toFixed(3)}
+                                  </td>
+                                  <td className="p-5 text-center font-mono text-sm hidden sm:table-cell text-slate-400">
+                                    {typeof team.pointRatio === 'string' ? team.pointRatio : team.pointRatio.toFixed(3)}
+                                  </td>
+                                  <td className="p-5 text-center font-mono text-sm hidden sm:table-cell text-slate-400">
+                                    {team.squadSize}
+                                  </td>
+                                  <td className="p-5 text-center bg-white/5">
+                                    <span className="text-2xl font-black text-blue-400">{team.leaguePoints}</span>
+                                  </td>
+                                </tr>
+                                {/* Expanded Details */}
+                                {expandedTeamId === team.id && (
+                                  <tr className="bg-slate-900/50 animate-fade-in text-sm">
+                                    <td colSpan="8" className="p-6 border-b border-white/5">
+                                      <div className="grid md:grid-cols-2 gap-8">
+                                        <div>
+                                          <h4 className="text-slate-400 font-bold uppercase tracking-wider mb-3 text-xs">Recent Results</h4>
+                                          <div className="space-y-2">
+                                            {matches.filter(m => (m.teamA === team.id || m.teamB === team.id) && m.stageId === superStage.id && m.status === 'finished').length === 0 && <p className="text-slate-600 italic">No finished matches in this stage.</p>}
+                                            {matches.filter(m => (m.teamA === team.id || m.teamB === team.id) && m.stageId === superStage.id && m.status === 'finished').map(m => {
+                                              const isA = m.teamA === team.id;
+                                              const opp = isA ? m.teamB : m.teamA;
+                                              const win = m.winner === team.id;
+                                              return (
+                                                <div key={m.id} className="flex justify-between items-center p-2 bg-slate-950 rounded border border-white/5">
+                                                  <span className="text-slate-300">vs <strong className="text-white">{getTeam(teams, opp).name}</strong></span>
+                                                  <span className={`font-mono font-bold ${win ? 'text-green-400' : 'text-red-400'}`}>
+                                                    {isA ? m.setsA : m.setsB}-{isA ? m.setsB : m.setsA}
+                                                  </span>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <h4 className="text-slate-400 font-bold uppercase tracking-wider mb-3 text-xs">Upcoming Schedule</h4>
+                                          <div className="space-y-2">
+                                            {matches.filter(m => (m.teamA === team.id || m.teamB === team.id) && m.stageId === superStage.id && m.status === 'scheduled').length === 0 && <p className="text-slate-600 italic">No upcoming matches in this stage.</p>}
+                                            {matches.filter(m => (m.teamA === team.id || m.teamB === team.id) && m.stageId === superStage.id && m.status === 'scheduled').map(m => {
+                                              const isA = m.teamA === team.id;
+                                              const opp = isA ? m.teamB : m.teamA;
+                                              return (
+                                                <div key={m.id} className="flex justify-between items-center p-2 bg-slate-950 rounded border border-white/5">
+                                                  <span className="text-slate-300">vs <strong className="text-white">{getTeam(teams, opp).name}</strong></span>
+                                                  <span className="text-xs text-blue-400 font-bold">
+                                                    {new Date(m.startTime).toLocaleDateString()} {new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                  </span>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
                             );
                           })}
                         </tbody>
                       </table>
                     </GlassCard>
-                  )
-                }
+                  );
+                })()}
 
               </div>
             )}
