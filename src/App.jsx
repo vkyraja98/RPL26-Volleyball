@@ -1197,6 +1197,9 @@ const AdminDashboard = ({
     if (nextStage && nextStage.type === 'league') {
       const qualifiedIds = qualifiedTeams.map(q => q.id);
       const updatedStages = stages.map(s => {
+        if (s.id === stageId) {
+          return { ...s, status: 'completed' };
+        }
         if (s.id === nextStage.id) {
           return {
             ...s,
@@ -1934,7 +1937,7 @@ export default function App() {
           setsWon += teamSets;
           setsLost += oppSets;
 
-          m.score?.forEach(s => {
+          m.scores?.forEach(s => {
             pointsWon += isA ? (s.a || 0) : (s.b || 0);
             pointsLost += isA ? (s.b || 0) : (s.a || 0);
           });
@@ -2368,49 +2371,63 @@ export default function App() {
                 })()}
 
                 {/* SUPER STAGE TABLE API */}
-                {config.roadmap?.currentStage !== 'group' && standings.superStage?.length > 0 && (
-                  <GlassCard className="p-0 overflow-x-auto border-t-4 border-purple-500">
-                    <div className="p-4 bg-white/5 border-b border-white/10 flex justify-between items-center">
-                      <h3 className="text-xl font-black text-white uppercase tracking-widest">{config.roadmap?.superStageName || 'Super Stage'}</h3>
-                      <span className="text-xs text-purple-300 font-bold uppercase tracking-wider">
-                        Top {config.stages.find(s => s.type === 'league')?.settings?.qualifiersFromPrev || 4} Qualify
-                      </span>
-                    </div>
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-white/5 text-slate-400 text-xs font-bold uppercase tracking-widest border-b border-white/10">
-                          <th className="p-5">Rank</th>
-                          <th className="p-5">Team</th>
-                          <th className="p-5 text-center">P</th>
-                          <th className="p-5 text-center">W/L</th>
-                          <th className="p-5 text-center">NRR/Ratio</th>
-                          <th className="p-5 text-center text-blue-300">PTS</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {standings.superStage.map((team, idx) => {
-                          // Dynamic Qualification Count from Stage Settings
-                          const superStage = config.stages.find(s => s.type === 'league');
-                          const qualifyCount = superStage?.settings?.qualifiersFromPrev || config.roadmap?.qualificationCount || 4;
-                          const isQualified = idx < qualifyCount;
-                          return (
-                            <tr key={team.id} className={`border-b border-white/5 ${isQualified ? 'bg-green-500/5' : ''}`}>
-                              <td className="p-5 font-mono text-slate-400">{idx + 1}</td>
-                              <td className="p-5 font-bold text-white flex items-center gap-2">
-                                <div className={`w-3 h-3 rounded-full ${team.color}`} /> {team.name}
-                                {isQualified && <CheckCircle2 size={12} className="text-green-500" />}
-                              </td>
-                              <td className="p-5 text-center text-slate-400">{team.played}</td>
-                              <td className="p-5 text-center text-slate-300">{team.won}/{team.lost}</td>
-                              <td className="p-5 text-center text-slate-500 text-xs">{typeof team.setRatio === 'string' ? team.setRatio : team.setRatio.toFixed(2)}</td>
-                              <td className="p-5 text-center font-black text-blue-400">{team.leaguePoints}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </GlassCard>
-                )}
+                {(() => {
+                  const superStage = config.stages.find(s => s.type === 'league');
+                  if (!superStage) return null;
+
+                  // Check if previous stage is completed
+                  const prevStageIdx = config.stages.indexOf(superStage) - 1;
+                  const prevStage = prevStageIdx >= 0 ? config.stages[prevStageIdx] : null;
+
+                  // Only show if Admin explicitly completed the previous stage OR if current stage is active/completed
+                  const isVisible = prevStage?.status === 'completed' || superStage.status === 'completed' || config.roadmap?.currentStage === superStage.id;
+
+                  if (!isVisible) return null;
+
+                  return (
+                    <GlassCard className="p-0 overflow-x-auto border-t-4 border-purple-500">
+                      <div className="p-4 bg-white/5 border-b border-white/10 flex justify-between items-center">
+                        <h3 className="text-xl font-black text-white uppercase tracking-widest">{config.roadmap?.superStageName || 'Super Stage'}</h3>
+                        <span className="text-xs text-purple-300 font-bold uppercase tracking-wider">
+                          Top {config.stages.find(s => s.type === 'league')?.settings?.qualifiersFromPrev || 4} Qualify
+                        </span>
+                      </div>
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-white/5 text-slate-400 text-xs font-bold uppercase tracking-widest border-b border-white/10">
+                            <th className="p-5">Rank</th>
+                            <th className="p-5">Team</th>
+                            <th className="p-5 text-center">P</th>
+                            <th className="p-5 text-center">W/L</th>
+                            <th className="p-5 text-center">NRR/Ratio</th>
+                            <th className="p-5 text-center text-blue-300">PTS</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {standings.superStage.map((team, idx) => {
+                            // Dynamic Qualification Count from Stage Settings
+                            const superStage = config.stages.find(s => s.type === 'league');
+                            const qualifyCount = superStage?.settings?.qualifiersFromPrev || config.roadmap?.qualificationCount || 4;
+                            const isQualified = idx < qualifyCount;
+                            return (
+                              <tr key={team.id} className={`border-b border-white/5 ${isQualified ? 'bg-green-500/5' : ''}`}>
+                                <td className="p-5 font-mono text-slate-400">{idx + 1}</td>
+                                <td className="p-5 font-bold text-white flex items-center gap-2">
+                                  <div className={`w-3 h-3 rounded-full ${team.color}`} /> {team.name}
+                                  {isQualified && <CheckCircle2 size={12} className="text-green-500" />}
+                                </td>
+                                <td className="p-5 text-center text-slate-400">{team.played}</td>
+                                <td className="p-5 text-center text-slate-300">{team.won}/{team.lost}</td>
+                                <td className="p-5 text-center text-slate-500 text-xs">{typeof team.setRatio === 'string' ? team.setRatio : team.setRatio.toFixed(2)}</td>
+                                <td className="p-5 text-center font-black text-blue-400">{team.leaguePoints}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </GlassCard>
+                  )
+                }
 
               </div>
             )}
