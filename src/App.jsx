@@ -942,13 +942,22 @@ const StageBuilder = ({ config, updateConfig, completeStage }) => {
 
             {/* ACTION FOOTER */}
             {idx < config.stages.length - 1 && (
-              <div className="mt-4 pt-4 border-t border-white/5 flex justify-end">
-                <button
-                  onClick={() => completeStage && completeStage(stage.id)}
-                  className="flex items-center gap-2 px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600 hover:text-white text-emerald-400 border border-emerald-500/30 rounded font-bold text-xs uppercase tracking-wider transition-all"
-                >
-                  <CheckCircle2 size={14} /> Mark Stage Complete
-                </button>
+              <div className="mt-4 pt-4 border-t border-white/5 flex justify-end gap-2">
+                {stage.status === 'completed' ? (
+                  <button
+                    onClick={() => uncompleteStage && uncompleteStage(stage.id)}
+                    className="flex items-center gap-2 px-3 py-2 bg-yellow-600/20 hover:bg-yellow-600 hover:text-white text-yellow-400 border border-yellow-500/30 rounded font-bold text-xs uppercase tracking-wider transition-all"
+                  >
+                    <Trash2 size={14} /> Unmark Complete
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => completeStage && completeStage(stage.id)}
+                    className="flex items-center gap-2 px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600 hover:text-white text-emerald-400 border border-emerald-500/30 rounded font-bold text-xs uppercase tracking-wider transition-all"
+                  >
+                    <CheckCircle2 size={14} /> Mark Stage Complete
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -1308,26 +1317,46 @@ const AdminDashboard = ({
     if (!confirm("DANGER: This will RESET ALL SCORES and STAGE PROGRESS. The match schedule (dates/times) will be preserved, but all results will be wiped. Are you sure?")) return;
     if (!confirm("Double Check: This action cannot be undone. All match results will be lost. Proceed?")) return;
 
-    // 1. Reset Matches
+    const stages = config.stages || [];
     let matchUpdates = 0;
+
+    // 1. Prepare Placeholder Map (Reverse lookup for League Stages)
+    // TeamID -> Placeholder (e.g. "Rank 1")
+    const placeholderMap = {};
+    stages.forEach(s => {
+      if (s.type === 'league' && s.settings?.teams?.length > 0) {
+        s.settings.teams.forEach((tid, idx) => {
+          placeholderMap[tid] = `Rank ${idx + 1}`;
+        });
+      }
+      // Only do this for League stages where teams were promoted.
+      // Group stages (type='group') have fixed teams.
+    });
+
+    // 2. Reset Matches & Restore Placeholders
     for (const m of matches) {
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', m.id), {
+      let update = {
         status: 'scheduled',
         setsA: 0, setsB: 0, scores: [], winner: null,
         isMVP: null
-      });
+      };
+
+      // Attempt to restore placeholders if mapped
+      // Only if the match is NOT in a group stage (Group stages keep real teams)
+      const matchStage = stages.find(s => s.id === m.stageId || s.name === m.stage);
+      if (matchStage && matchStage.type !== 'group') {
+        if (placeholderMap[m.teamA]) update.teamA = placeholderMap[m.teamA];
+        if (placeholderMap[m.teamB]) update.teamB = placeholderMap[m.teamB];
+      }
+
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', m.id), update);
       matchUpdates++;
     }
 
-    // 2. Reset Stages
-    const stages = config.stages || [];
+    // 3. Reset Stages
     const updatedStages = stages.map((s, idx) => {
-      // Keep Group Stage teams (if any), but clear 'status'
-      // Clear teams for subsequent league stages
       const { status, ...rest } = s;
-
-      // If it's a derived stage (League/Playoff) that depends on qualification, clear its teams
-      // Exception: If it's the very first stage, keep it.
+      // Clear teams for derived league stages
       if (idx > 0 && s.type === 'league') {
         return { ...rest, settings: { ...rest.settings, teams: [] } };
       }
@@ -1337,11 +1366,11 @@ const AdminDashboard = ({
     const newConfig = {
       ...config,
       stages: updatedStages,
-      roadmap: { ...config.roadmap, currentStage: stages[0]?.id || 'group' } // Reset current stage pointer
+      roadmap: { ...config.roadmap, currentStage: stages[0]?.id || 'group' }
     };
 
     await updateConfig(newConfig);
-    alert(`Tournament Restarted! Reset ${matchUpdates} matches.`);
+    alert(`Tournament Restarted! Reset ${matchUpdates} matches and restored placeholders.`);
   };
 
   const handleStartMatchClick = (match) => {
@@ -1955,22 +1984,32 @@ export default function App() {
     currentScores[currentSetIndex] = newSetScore;
 
     // RULE SELECTION
-    // 1. Try finding stage by ID
+    // 1. Try finding stage by ID (Precise)
     const stage = config.stages?.find(s => s.id === match.stageId);
-    // 2. Try finding stage by Name (fallback)
+
+    // 2. Try finding stage by Name (Fallback / Legacy matches)
     const stageByName = config.stages?.find(s => s.name === match.stage);
 
-    // 3. Determine Rules
+    // 3. Fallback for generic legacy names
+    const legacyKey = Object.keys(config.matchRules || {}).find(key => match.stage?.toLowerCase().includes(key.toLowerCase()));
+
+    // 4. Determine Rules Priority
     const stageRules =
       stage?.settings?.matchRules ||
       stageByName?.settings?.matchRules ||
-      (config?.matchRules && config.matchRules[match.stage]) ||
+      (legacyKey && config.matchRules?.[legacyKey]) ||
       config?.matchRules?.league ||
       { sets: 3, points: 25, tieBreak: 15 };
+
+    console.log(`Match ${match.id} Rules [Stage: ${match.stage}]:`, stageRules);
 
     const setsToWin = Math.ceil(stageRules.sets / 2);
 
     // Check if decider
+    // Note: currentScores includes the current set being played. 
+    // e.g. If sets=3, decider is when we are pushing into index 2 (3rd set).
+    // currentScores.length is 1 (Set 1), 2 (Set 2), 3 (Set 3).
+    // isDecidingSet should be true if currentScores.length === stageRules.sets
     const isDecidingSet = currentScores.length === stageRules.sets;
     const targetPoints = isDecidingSet ? stageRules.tieBreak : stageRules.points;
     const diff = Math.abs(newSetScore.a - newSetScore.b);
