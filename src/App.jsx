@@ -2229,6 +2229,17 @@ export default function App() {
       return;
     }
 
+    // FIND THE KNOCKOUT STAGE ID
+    const knockoutStage = config.stages?.find(s => s.type === 'knockout');
+    const stageId = knockoutStage?.id;
+    const stageName = knockoutStage?.name || 'Playoffs';
+
+    if (!knouckoutStage && !stageId) {
+      // If no knockout stage exists in stages, checking match rules might fail.
+      // But we proceed for now, assuming fallback or legacy.
+      console.warn("No specific Knockout stage found in config. Rules might default.");
+    }
+
     if (config.roadmap?.playoffType === 'eliminator') {
       // WPL Format: 
       // 1. Eliminator: Rank 2 vs Rank 3
@@ -2243,28 +2254,30 @@ export default function App() {
         teamB: rank3.id,
         date: new Date().toISOString().split('T')[0],
         time: '18:00',
-        stage: 'playoff',
+        stage: stageName,
+        stageId: stageId, // CRITICAL: Link to stage settings
         matchName: 'Eliminator'
       });
 
       await createFixture({
         teamA: rank1.id,
-        teamB: 'PLACEHOLDER:ELIM:Winner', // Placeholder logic needed in StartMatch/Scorer to resolve or just manual
+        teamB: 'PLACEHOLDER:ELIM:Winner',
         date: new Date().toISOString().split('T')[0],
         time: '20:00',
-        stage: 'final',
+        stage: stageName,
+        stageId: stageId, // CRITICAL: Link to stage settings
         matchName: 'Final'
       });
 
-      alert("Generated WPL Style Playoffs: Eliminator & Final (Placeholder).");
+      alert("Generated WPL Style Playoffs: Eliminator & Final.");
 
     } else {
       // Standard Semis
       // 1 vs 4, 2 vs 3
       if (qualifiedTeams.length < 4) { alert("Need 4 teams for Standard Semis"); return; }
 
-      await createFixture({ teamA: qualifiedTeams[0].id, teamB: qualifiedTeams[3].id, date: new Date().toISOString().split('T')[0], time: '18:00', stage: 'semis', matchName: 'Semi Final 1' });
-      await createFixture({ teamA: qualifiedTeams[1].id, teamB: qualifiedTeams[2].id, date: new Date().toISOString().split('T')[0], time: '20:00', stage: 'semis', matchName: 'Semi Final 2' });
+      await createFixture({ teamA: qualifiedTeams[0].id, teamB: qualifiedTeams[3].id, date: new Date().toISOString().split('T')[0], time: '18:00', stage: stageName, stageId: stageId, matchName: 'Semi Final 1' });
+      await createFixture({ teamA: qualifiedTeams[1].id, teamB: qualifiedTeams[2].id, date: new Date().toISOString().split('T')[0], time: '20:00', stage: stageName, stageId: stageId, matchName: 'Semi Final 2' });
       alert("Generated Standard Semi Finals.");
     }
 
