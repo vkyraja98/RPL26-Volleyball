@@ -1270,6 +1270,80 @@ const AdminDashboard = ({
     alert(`Stage Complete! Updated ${updatesCount} upcoming matches and promoted ${qualifiedTeams.length} teams.`);
   };
 
+  const uncompleteStage = async (stageId) => {
+    if (!confirm("Are you sure you want to UNMARK this stage as complete? This will revert the status and clear qualified teams from the next stage.")) return;
+
+    const stages = config.stages || [];
+    const stage = stages.find(s => s.id === stageId);
+    if (!stage) return;
+
+    const nextStageIdx = stages.indexOf(stage) + 1;
+    const nextStage = stages[nextStageIdx];
+
+    // 1. Revert Stage Status
+    const updatedStages = stages.map(s => {
+      if (s.id === stageId) {
+        const { status, ...rest } = s; // Remove status
+        return rest;
+      }
+      // 2. Clear Next Stage Teams
+      if (nextStage && s.id === nextStage.id && s.type === 'league') {
+        return {
+          ...s,
+          settings: {
+            ...s.settings,
+            teams: [] // Clear teams to revert to placeholders
+          }
+        };
+      }
+      return s;
+    });
+
+    const newConfig = { ...config, stages: updatedStages };
+    await updateConfig(newConfig);
+    alert("Stage Unmarked! Next stage teams have been cleared.");
+  };
+
+  const restartTournament = async () => {
+    if (!confirm("DANGER: This will RESET ALL SCORES and STAGE PROGRESS. The match schedule (dates/times) will be preserved, but all results will be wiped. Are you sure?")) return;
+    if (!confirm("Double Check: This action cannot be undone. All match results will be lost. Proceed?")) return;
+
+    // 1. Reset Matches
+    let matchUpdates = 0;
+    for (const m of matches) {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', m.id), {
+        status: 'scheduled',
+        setsA: 0, setsB: 0, scores: [], winner: null,
+        isMVP: null
+      });
+      matchUpdates++;
+    }
+
+    // 2. Reset Stages
+    const stages = config.stages || [];
+    const updatedStages = stages.map((s, idx) => {
+      // Keep Group Stage teams (if any), but clear 'status'
+      // Clear teams for subsequent league stages
+      const { status, ...rest } = s;
+
+      // If it's a derived stage (League/Playoff) that depends on qualification, clear its teams
+      // Exception: If it's the very first stage, keep it.
+      if (idx > 0 && s.type === 'league') {
+        return { ...rest, settings: { ...rest.settings, teams: [] } };
+      }
+      return rest;
+    });
+
+    const newConfig = {
+      ...config,
+      stages: updatedStages,
+      roadmap: { ...config.roadmap, currentStage: stages[0]?.id || 'group' } // Reset current stage pointer
+    };
+
+    await updateConfig(newConfig);
+    alert(`Tournament Restarted! Reset ${matchUpdates} matches.`);
+  };
+
   const handleStartMatchClick = (match) => {
     setSelectedMatch(match);
     setShowTossModal(true);
@@ -1685,7 +1759,7 @@ const AdminDashboard = ({
 
                   {/* STAGE BUILDER */}
                   <div className="bg-slate-900/80 p-6 rounded-xl border border-white/5">
-                    <StageBuilder config={localConfig} updateConfig={setLocalConfig} completeStage={completeStage} />
+                    <StageBuilder config={localConfig} updateConfig={setLocalConfig} completeStage={completeStage} uncompleteStage={uncompleteStage} />
                   </div>
                   {/* Legacy Config Hidden */}
                   <div className="hidden">
@@ -1760,6 +1834,17 @@ const AdminDashboard = ({
                   <button className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-lg hover:from-blue-500 hover:to-indigo-500 transition-all flex justify-center items-center gap-2 shadow-lg uppercase tracking-wider text-sm">
                     <Save size={18} /> Save Configuration
                   </button>
+
+                  <div className="pt-8 border-t border-white/10 mt-8">
+                    <h4 className="text-red-400 font-bold uppercase tracking-widest text-xs mb-4">Danger Zone</h4>
+                    <button
+                      type="button"
+                      onClick={restartTournament}
+                      className="w-full py-3 bg-red-500/10 border border-red-500/50 text-red-400 font-bold rounded hover:bg-red-500 hover:text-white transition-colors uppercase tracking-wider text-xs"
+                    >
+                      Restart Tournament (Reset Scores)
+                    </button>
+                  </div>
                 </form>
               </AdminGlassCard>
             )}
