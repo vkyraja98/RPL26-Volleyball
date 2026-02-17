@@ -219,13 +219,64 @@ const RoadmapView = ({ teams, matches, config, standings }) => {
                 <GlassCard className="p-4 w-72 border-l-4 border-purple-500">
                   <h5 className="text-purple-400 font-bold uppercase tracking-widest text-[10px] mb-3">Standings</h5>
                   <div className="space-y-1">
-                    {(standings[stage.id] || standings.superStage || []).map((s, i) => (
-                      <div key={s.id} className={`text-xs flex justify-between ${i < (stage.settings.qualifiers || 4) ? 'text-green-300 font-bold' : 'text-slate-400'}`}>
-                        <span>{i + 1}. {s.name}</span>
-                        <span className="font-mono">{s.leaguePoints}pts</span>
-                      </div>
-                    ))}
-                    {(!standings[stage.id] && (!standings.superStage || standings.superStage.length === 0)) && <div className="text-xs text-slate-500 italic">Waiting for Qualifiers (A1, B1...)</div>}
+                    {(() => {
+                      // 1. Check if we have qualified teams assigned to this stage
+                      const qualifiedTeamIds = stage.settings?.teams || [];
+                      const hasQualifiedTeams = qualifiedTeamIds.length > 0;
+
+                      if (hasQualifiedTeams) {
+                        // FILTER: Only show teams that are actually in this stage
+                        const stageStandings = (standings[stage.id] || standings.superStage || [])
+                          .filter(t => qualifiedTeamIds.includes(t.id));
+
+                        if (stageStandings.length === 0) {
+                          // Fallback if standings object misses them (e.g. fresh start)
+                          return qualifiedTeamIds.map((tid, i) => {
+                            const t = teams.find(team => team.id === tid);
+                            return (
+                              <div key={tid} className="text-xs flex justify-between text-slate-300">
+                                <span>{i + 1}. {t?.name || 'Unknown'}</span>
+                                <span className="font-mono">0pts</span>
+                              </div>
+                            );
+                          });
+                        }
+
+                        return stageStandings.map((s, i) => (
+                          <div key={s.id} className={`text-xs flex justify-between ${i < (stage.settings.qualifiersFromPrev || 4) ? 'text-green-300 font-bold' : 'text-slate-400'}`}>
+                            <span>{i + 1}. {s.name}</span>
+                            <span className="font-mono">{s.leaguePoints}pts</span>
+                          </div>
+                        ));
+                      } else {
+                        // 2. PLACEHOLDERS (Stage not started)
+                        const prevStage = stages[idx - 1];
+                        const placeholders = [];
+
+                        if (prevStage && prevStage.type === 'group') {
+                          // Generate A1, A2, B1, B2...
+                          const numGroups = prevStage.settings?.numGroups || 2;
+                          const perGroup = prevStage.settings?.qualifiersPerGroup || 2;
+                          for (let g = 0; g < numGroups; g++) {
+                            const groupChar = String.fromCharCode(65 + g);
+                            for (let q = 1; q <= perGroup; q++) {
+                              placeholders.push(`${groupChar}${q}`);
+                            }
+                          }
+                        } else {
+                          // Fallback Rank based
+                          const count = 4; // Default if not inferable
+                          for (let i = 1; i <= count; i++) placeholders.push(`Rank ${i}`);
+                        }
+
+                        return placeholders.map((p, i) => (
+                          <div key={i} className="text-xs flex justify-between text-slate-500 italic">
+                            <span>{i + 1}. {p}</span>
+                            <span className="font-mono">--</span>
+                          </div>
+                        ));
+                      }
+                    })()}
                   </div>
                 </GlassCard>
               )}
