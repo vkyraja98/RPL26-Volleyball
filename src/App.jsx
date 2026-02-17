@@ -1321,16 +1321,37 @@ const AdminDashboard = ({
     let matchUpdates = 0;
 
     // 1. Prepare Placeholder Map (Reverse lookup for League Stages)
-    // TeamID -> Placeholder (e.g. "Rank 1")
+    // TeamID -> Placeholder
     const placeholderMap = {};
-    stages.forEach(s => {
+    stages.forEach((s, idx) => {
+      // Logic mirrors completeStage: how were teams assigned?
       if (s.type === 'league' && s.settings?.teams?.length > 0) {
-        s.settings.teams.forEach((tid, idx) => {
-          placeholderMap[tid] = `Rank ${idx + 1}`;
+        const prevStage = stages[idx - 1];
+        let calculatedPlaceholders = [];
+
+        if (prevStage && prevStage.type === 'group') {
+          // Group Stage Source: A1, A2... B1, B2...
+          const numGroups = prevStage.settings?.numGroups || 2;
+          const qualifiers = prevStage.settings?.qualifiersPerGroup || 2;
+          for (let g = 0; g < numGroups; g++) {
+            const groupChar = String.fromCharCode(65 + g);
+            for (let q = 1; q <= qualifiers; q++) {
+              calculatedPlaceholders.push(`${groupChar}${q}`);
+            }
+          }
+        } else {
+          // League Source: Rank 1, Rank 2...
+          const count = s.settings.teams.length;
+          for (let i = 1; i <= count; i++) calculatedPlaceholders.push(`Rank ${i}`);
+        }
+
+        // Map TeamID -> Placeholder
+        s.settings.teams.forEach((tid, i) => {
+          if (calculatedPlaceholders[i]) {
+            placeholderMap[tid] = calculatedPlaceholders[i]; // e.g. "team_123" -> "A1"
+          }
         });
       }
-      // Only do this for League stages where teams were promoted.
-      // Group stages (type='group') have fixed teams.
     });
 
     // 2. Reset Matches & Restore Placeholders
@@ -1341,10 +1362,18 @@ const AdminDashboard = ({
         isMVP: null
       };
 
-      // Attempt to restore placeholders if mapped
-      // Only if the match is NOT in a group stage (Group stages keep real teams)
+      // Restore placeholders if mapped and not group stage
       const matchStage = stages.find(s => s.id === m.stageId || s.name === m.stage);
+      // Ensure we don't accidentally rename Fixed Group Teams (which have IDs)
+      // Only rename if it matches a placeholder pattern we generated
+      // Or if the matched ID is in our map
       if (matchStage && matchStage.type !== 'group') {
+        if (placeholderMap[m.teamA]) update.teamA = placeholderMap[m.teamA];
+        if (placeholderMap[m.teamB]) update.teamB = placeholderMap[m.teamB];
+      }
+
+      // Fallback for matches without strict stage links (like some playoffs)
+      if (!matchStage && (placeholderMap[m.teamA] || placeholderMap[m.teamB])) {
         if (placeholderMap[m.teamA]) update.teamA = placeholderMap[m.teamA];
         if (placeholderMap[m.teamB]) update.teamB = placeholderMap[m.teamB];
       }
@@ -1990,28 +2019,42 @@ export default function App() {
     // 2. Try finding stage by Name (Fallback / Legacy matches)
     const stageByName = config.stages?.find(s => s.name === match.stage);
 
-    // 3. Fallback for generic legacy names
-    const legacyKey = Object.keys(config.matchRules || {}).find(key => match.stage?.toLowerCase().includes(key.toLowerCase()));
+    // 3. Fallback for generic legacy names or matches without IDs
+    let fallbackRules = config?.matchRules?.league;
+    // Check if it's a playoff/knockout match
+    if (match.stage?.toLowerCase().includes('final') || match.stage?.toLowerCase().includes('playoff') || match.matchName?.toLowerCase().includes('eliminator') || match.matchName?.toLowerCase().includes('semi')) {
+      // Find knockout stage info
+      const knockoutStage = config.stages?.find(s => s.type === 'knockout');
+      if (knockoutStage && knockoutStage.settings?.matchRules) {
+        fallbackRules = knockoutStage.settings.matchRules;
+      } else if (config.matchRules?.playoff) {
+        fallbackRules = config.matchRules.playoff;
+      }
+    }
 
     // 4. Determine Rules Priority
     const stageRules =
       stage?.settings?.matchRules ||
       stageByName?.settings?.matchRules ||
-      (legacyKey && config.matchRules?.[legacyKey]) ||
-      config?.matchRules?.league ||
+      (config?.matchRules && config.matchRules[match.stage]) ||
+      fallbackRules ||
       { sets: 3, points: 25, tieBreak: 15 };
 
     console.log(`Match ${match.id} Rules [Stage: ${match.stage}]:`, stageRules);
 
-    const setsToWin = Math.ceil(stageRules.sets / 2);
+    const rulesSets = parseInt(stageRules.sets || 3);
+    const rulesPoints = parseInt(stageRules.points || 25);
+    const rulesTieBreak = parseInt(stageRules.tieBreak || 15);
+
+    const setsToWin = Math.ceil(rulesSets / 2);
 
     // Check if decider
     // Note: currentScores includes the current set being played. 
     // e.g. If sets=3, decider is when we are pushing into index 2 (3rd set).
     // currentScores.length is 1 (Set 1), 2 (Set 2), 3 (Set 3).
     // isDecidingSet should be true if currentScores.length === stageRules.sets
-    const isDecidingSet = currentScores.length === stageRules.sets;
-    const targetPoints = isDecidingSet ? stageRules.tieBreak : stageRules.points;
+    const isDecidingSet = currentScores.length === rulesSets;
+    const targetPoints = isDecidingSet ? rulesTieBreak : rulesPoints;
     const diff = Math.abs(newSetScore.a - newSetScore.b);
     const hasReachedTarget = (newSetScore.a >= targetPoints || newSetScore.b >= targetPoints);
 
