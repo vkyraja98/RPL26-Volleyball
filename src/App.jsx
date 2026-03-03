@@ -2186,8 +2186,8 @@ export default function App() {
       (snap) => setMatches(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubConfig = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'main'),
       (snap) => snap.exists() && setAppConfig({ ...DEFAULT_CONFIG, ...snap.data() }));
-    return () => { unsubTeams(); unsubMatches(); unsubConfig(); };
-  }, [user]);
+    return () => { unsubTeams(); unsubPlayers(); unsubMatches(); unsubConfig(); };
+  }, [user, appId]);
 
   // --- Logic ---
 
