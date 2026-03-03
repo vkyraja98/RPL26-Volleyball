@@ -720,9 +720,33 @@ const AdminScorer = ({ match, teams = [], config, handleScore, handleUndo, setVi
   const leftScore = swapSides ? currentSet.b : currentSet.a;
   const rightScore = swapSides ? currentSet.a : currentSet.b;
 
+  // RULE SELECTION CONSOLIDATION
+  const getMatchRules = () => {
+    const stage = config?.stages?.find(s => s.id === safeMatch.stageId);
+    const stageByName = config?.stages?.find(s => s.name === safeMatch.stage);
+
+    let fallbackRules = config?.matchRules?.league;
+    if (safeMatch.stage?.toLowerCase().includes('final') || safeMatch.stage?.toLowerCase().includes('playoff') || safeMatch.matchName?.toLowerCase().includes('eliminator') || safeMatch.matchName?.toLowerCase().includes('semi')) {
+      const knockoutStage = config?.stages?.find(s => s.type === 'knockout');
+      if (knockoutStage && knockoutStage.settings?.matchRules) {
+        fallbackRules = knockoutStage.settings.matchRules;
+      } else if (config?.matchRules?.playoff) {
+        fallbackRules = config.matchRules.playoff;
+      }
+    }
+
+    const rawRules = stage?.settings?.matchRules || stageByName?.settings?.matchRules || (config?.matchRules && config.matchRules[safeMatch.stage]) || fallbackRules || { sets: 3, points: 25, tieBreak: 15 };
+
+    return {
+      sets: parseInt(rawRules.sets || 3) || 3,
+      points: parseInt(rawRules.points || 25) || 25,
+      tieBreak: parseInt(rawRules.tieBreak || 15) || 15
+    };
+  };
+
+  const stageRules = getMatchRules();
   const setIdx = currentScores.length;
 
-  const stageRules = (config?.matchRules && config.matchRules[safeMatch.stage]) || config?.matchRules?.league || { sets: 3, points: 25, tieBreak: 15 };
   const isDecider = setIdx === stageRules.sets;
   const base = isDecider ? stageRules.tieBreak : stageRules.points;
   const maxScore = Math.max(currentSet.a, currentSet.b);
@@ -1819,6 +1843,53 @@ const AdminDashboard = ({
                   <div className="bg-slate-900/80 p-6 rounded-xl border border-white/5">
                     <StageBuilder config={localConfig} updateConfig={setLocalConfig} completeStage={completeStage} uncompleteStage={uncompleteStage} />
                   </div>
+
+                  {/* GLOBAL MATCH RULES SETTINGS */}
+                  <div className="bg-slate-900/80 p-6 rounded-xl border border-white/5 mt-6">
+                    <h4 className="text-white font-bold mb-4 uppercase tracking-wider text-sm flex items-center justify-between border-b border-white/10 pb-2">
+                      Global Match Rules (Default)
+                    </h4>
+                    <div className="grid md:grid-cols-2 gap-8">
+                      {/* LEAGUE DEFAULTS */}
+                      <div className="space-y-4">
+                        <h5 className="text-emerald-400 font-bold uppercase tracking-widest text-[10px]">League / Group Rules Default</h5>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Sets</label>
+                            <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules?.league?.sets || 3} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, league: { ...localConfig.matchRules?.league, sets: parseInt(e.target.value) } } })} />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Points</label>
+                            <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules?.league?.points || 25} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, league: { ...localConfig.matchRules?.league, points: parseInt(e.target.value) } } })} />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tie-Break</label>
+                            <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules?.league?.tieBreak || 15} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, league: { ...localConfig.matchRules?.league, tieBreak: parseInt(e.target.value) } } })} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* PLAYOFF DEFAULTS */}
+                      <div className="space-y-4">
+                        <h5 className="text-orange-400 font-bold uppercase tracking-widest text-[10px]">Knockout / Playoff Rules Default</h5>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Sets</label>
+                            <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules?.playoff?.sets || 5} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, playoff: { ...localConfig.matchRules?.playoff, sets: parseInt(e.target.value) } } })} />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Points</label>
+                            <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules?.playoff?.points || 25} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, playoff: { ...localConfig.matchRules?.playoff, points: parseInt(e.target.value) } } })} />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tie-Break</label>
+                            <input type="number" className="w-full p-2 bg-slate-800 rounded text-white text-sm" value={localConfig.matchRules?.playoff?.tieBreak || 15} onChange={e => setLocalConfig({ ...localConfig, matchRules: { ...localConfig.matchRules, playoff: { ...localConfig.matchRules?.playoff, tieBreak: parseInt(e.target.value) } } })} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Legacy Config Hidden */}
                   <div className="hidden">
                     <h4 className="text-purple-400 font-bold mb-4 uppercase tracking-wider text-sm">Roadmap Configuration</h4>
@@ -2250,50 +2321,15 @@ export default function App() {
     const newPointHistory = match.pointHistory ? [...match.pointHistory] : [];
     newPointHistory.push({ team, setIndex: currentSetIndex });
 
-    // RULE SELECTION
-    // 1. Try finding stage by ID (Precise)
-    const stage = config.stages?.find(s => s.id === match.stageId);
-
-    // 2. Try finding stage by Name (Fallback / Legacy matches)
-    const stageByName = config.stages?.find(s => s.name === match.stage);
-
-    // 3. Fallback for generic legacy names or matches without IDs
-    let fallbackRules = config?.matchRules?.league;
-    // Check if it's a playoff/knockout match
-    if (match.stage?.toLowerCase().includes('final') || match.stage?.toLowerCase().includes('playoff') || match.matchName?.toLowerCase().includes('eliminator') || match.matchName?.toLowerCase().includes('semi')) {
-      // Find knockout stage info
-      const knockoutStage = config.stages?.find(s => s.type === 'knockout');
-      if (knockoutStage && knockoutStage.settings?.matchRules) {
-        fallbackRules = knockoutStage.settings.matchRules;
-      } else if (config.matchRules?.playoff) {
-        fallbackRules = config.matchRules.playoff;
-      }
-    }
-
-    // 4. Determine Rules Priority
-    const stageRules =
-      stage?.settings?.matchRules ||
-      stageByName?.settings?.matchRules ||
-      (config?.matchRules && config.matchRules[match.stage]) ||
-      fallbackRules ||
-      { sets: 3, points: 25, tieBreak: 15 };
-
-    console.log(`Match ${match.id} Rules [Stage: ${match.stage}]:`, stageRules);
-
-    // ROBUST PARSING: Ensure we never get NaN
-    const rulesSets = parseInt(stageRules.sets || 3) || 3;
-    const rulesPoints = parseInt(stageRules.points || 25) || 25;
-    const rulesTieBreak = parseInt(stageRules.tieBreak || 15) || 15;
-
-    const setsToWin = Math.ceil(rulesSets / 2);
+    const setsToWin = Math.ceil(stageRules.sets / 2);
 
     // Check if decider
     // Note: currentScores includes the current set being played. 
     // e.g. If sets=3, decider is when we are pushing into index 2 (3rd set).
     // currentScores.length is 1 (Set 1), 2 (Set 2), 3 (Set 3).
     // isDecidingSet should be true if currentScores.length === stageRules.sets
-    const isDecidingSet = currentScores.length === rulesSets;
-    const targetPoints = isDecidingSet ? rulesTieBreak : rulesPoints;
+    const isDecidingSet = currentScores.length === stageRules.sets;
+    const targetPoints = isDecidingSet ? stageRules.tieBreak : stageRules.points;
     const diff = Math.abs(newSetScore.a - newSetScore.b);
     const hasReachedTarget = (newSetScore.a >= targetPoints || newSetScore.b >= targetPoints);
 
