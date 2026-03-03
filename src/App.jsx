@@ -8,11 +8,11 @@ import {
 import { initializeApp } from 'firebase/app';
 import {
   getFirestore, collection, addDoc, updateDoc,
-  doc, onSnapshot, query, orderBy, deleteDoc, setDoc
+  doc, onSnapshot, query, orderBy, deleteDoc, setDoc, getDocs, where
 } from 'firebase/firestore';
 import {
   getAuth, signInAnonymously, onAuthStateChanged,
-  signInWithCustomToken
+  signInWithCustomToken, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut
 } from 'firebase/auth';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -42,7 +42,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
 // --- Helpers ---
 const getTeam = (teams, id) => {
@@ -695,7 +694,7 @@ const MatchCardPublic = ({ match, teams, players, config, isLiveFeature = false 
 };
 
 // --- Admin Scorer ---
-const AdminScorer = ({ match, teams = [], config, handleScore, setView, updateDoc, db, appId }) => {
+const AdminScorer = ({ match, teams = [], config, handleScore, handleUndo, setView, updateDoc, db, appId }) => {
   const [swapSides, setSwapSides] = useState(false); // Visual Only
 
   // Safe Checks & Defaults to prevent Hooks violation
@@ -787,7 +786,7 @@ const AdminScorer = ({ match, teams = [], config, handleScore, setView, updateDo
 
       {/* Footer Actions */}
       <div className="relative z-10 bg-slate-900/80 backdrop-blur-md border-t border-white/10 p-6 flex justify-center gap-4">
-        <button className="flex items-center gap-2 px-8 py-4 bg-white/5 hover:bg-white/10 text-slate-300 rounded-xl font-bold transition-all border border-white/5 uppercase tracking-wider text-sm">
+        <button onClick={handleUndo} className="flex items-center gap-2 px-8 py-4 bg-white/5 hover:bg-white/10 text-slate-300 rounded-xl font-bold transition-all border border-white/5 uppercase tracking-wider text-sm">
           <ArrowLeft size={18} /> Undo
         </button>
       </div>
@@ -1915,35 +1914,270 @@ const AdminDashboard = ({
   );
 };
 
+// --- Landing Page & Host Auth ---
+const LandingPage = ({ setAppId, setView, hostUser, auth, db, setIsAdmin }) => {
+  const [isLogin, setIsLogin] = useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [myTournaments, setMyTournaments] = useState([]);
+  const [showCreate, setShowCreate] = useState(false);
+  const [newTName, setNewTName] = useState('');
+  const [newTIsPublic, setNewTIsPublic] = useState(true);
+
+  // load host's tournaments
+  useEffect(() => {
+    if (!hostUser || hostUser.isAnonymous) return;
+    const q = query(collection(db, 'tournaments'), where('hostUid', '==', hostUser.uid));
+    const unsub = onSnapshot(q, (snap) => {
+      setMyTournaments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => unsub();
+  }, [hostUser, db]);
+
+  // search
+  useEffect(() => {
+    const fetchPublic = async () => {
+      if (!searchQuery) {
+        setSearchResults([]);
+        return;
+      }
+      const q = query(collection(db, 'tournaments'), where('isPublic', '==', true));
+      const snap = await getDocs(q);
+      const results = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()));
+      setSearchResults(results);
+    };
+    fetchPublic();
+  }, [searchQuery, db]);
+
+  const handleAuth = async (e) => {
+    e.preventDefault();
+    try {
+      if (!isLogin) {
+        await createUserWithEmailAndPassword(auth, email, password);
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+      setEmail(''); setPassword('');
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const createTournament = async (e) => {
+    e.preventDefault();
+    if (!newTName || !hostUser) return;
+    const tRef = await addDoc(collection(db, 'tournaments'), {
+      name: newTName,
+      hostUid: hostUser.uid,
+      isPublic: newTIsPublic,
+      createdAt: new Date().toISOString()
+    });
+
+    // Create initial config in artifacts
+    await setDoc(doc(db, 'artifacts', tRef.id, 'public', 'data', 'config', 'main'), {
+      ...DEFAULT_CONFIG,
+      tournamentName: newTName,
+    });
+
+    setNewTName('');
+    setShowCreate(false);
+  };
+
+  const openTournament = (id, asAdmin = false) => {
+    window.history.pushState(null, '', '?t=' + id);
+    setAppId(id);
+    setIsAdmin(asAdmin);
+    setView(asAdmin ? 'admin-dashboard' : 'public');
+  };
+
+  const copyLink = (id) => {
+    const link = `${window.location.origin}${window.location.pathname}?t=${id}`;
+    navigator.clipboard.writeText(link);
+    alert('Link Copied!');
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 font-sans text-slate-100 p-8 relative overflow-hidden">
+      <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/20 via-slate-950 to-slate-950 pointer-events-none" />
+
+      <div className="max-w-6xl mx-auto relative z-10 grid md:grid-cols-2 gap-12 mt-10">
+        {/* LEFT COLUMN: Search & Public */}
+        <div className="space-y-8">
+          <div className="text-left">
+            <h1 className="text-4xl md:text-6xl font-black text-white uppercase tracking-tighter mb-4">
+              Pro Volley <span className="text-blue-500">Hub</span>
+            </h1>
+            <p className="text-slate-400 font-bold uppercase tracking-wider text-sm">Discover and Follow Tournaments</p>
+          </div>
+
+          <GlassCard className="p-6">
+            <div className="relative mb-6">
+              <input
+                type="text"
+                placeholder="Search public tournaments..."
+                className="w-full p-4 pl-12 bg-slate-900/50 border border-slate-700/50 rounded-xl text-white focus:border-blue-500 outline-none placeholder:text-slate-600"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
+              <Activity className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-500" size={20} />
+            </div>
+
+            <div className="space-y-4">
+              {searchQuery && searchResults.length === 0 && <p className="text-slate-500 italic text-center py-4">No tournaments found.</p>}
+              {searchResults.map(t => (
+                <div key={t.id} className="p-4 bg-slate-800/50 border border-white/5 rounded-xl flex justify-between items-center hover:bg-slate-800 transition-colors">
+                  <div>
+                    <h3 className="font-bold text-lg text-white">{t.name}</h3>
+                    <p className="text-xs text-slate-500 uppercase tracking-widest">{new Date(t.createdAt).toLocaleDateString()}</p>
+                  </div>
+                  <button onClick={() => openTournament(t.id)} className="px-4 py-2 bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white rounded-lg font-bold text-xs uppercase transition-colors">
+                    View
+                  </button>
+                </div>
+              ))}
+            </div>
+          </GlassCard>
+        </div>
+
+        {/* RIGHT COLUMN: Host Auth / Dashboard */}
+        <div>
+          {(!hostUser || hostUser.isAnonymous) ? (
+            <GlassCard className="p-8 border-t-4 border-blue-500">
+              <h2 className="text-2xl font-black text-white uppercase tracking-wide mb-2">Host Access</h2>
+              <p className="text-sm text-slate-400 mb-8">Login to manage your tournaments</p>
+
+              <form onSubmit={handleAuth} className="space-y-4">
+                <input
+                  type="email"
+                  placeholder="Email Address"
+                  className="w-full p-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-blue-500 outline-none"
+                  value={email} onChange={e => setEmail(e.target.value)} required
+                />
+                <input
+                  type="password"
+                  placeholder="Password"
+                  className="w-full p-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-blue-500 outline-none"
+                  value={password} onChange={e => setPassword(e.target.value)} required
+                />
+                <button type="submit" className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg uppercase tracking-wider transition-colors shadow-lg">
+                  {isLogin ? 'Login Dashboard' : 'Create Host Account'}
+                </button>
+              </form>
+              <div className="mt-6 text-center">
+                <button onClick={() => setIsLogin(!isLogin)} className="text-xs text-blue-400 hover:text-white uppercase tracking-widest font-bold">
+                  {isLogin ? 'Need an account? Register' : 'Have an account? Login'}
+                </button>
+              </div>
+            </GlassCard>
+          ) : (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center bg-slate-900/80 p-6 rounded-2xl border border-white/10 backdrop-blur-md shadow-xl">
+                <div>
+                  <h2 className="text-xl font-black text-white uppercase tracking-wide">My Tournaments</h2>
+                  <p className="text-xs text-slate-400">{hostUser.email}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setShowCreate(!showCreate)} className="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors" title="Create Tournament"><Plus size={20} /></button>
+                  <button onClick={() => signOut(auth)} className="p-2 bg-slate-800 hover:bg-slate-700 text-red-400 rounded-lg transition-colors border border-white/5" title="Log Out"><LogIn size={20} /></button>
+                </div>
+              </div>
+
+              {showCreate && (
+                <GlassCard className="p-6 border-blue-500/50 relative">
+                  <button onClick={() => setShowCreate(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white"><X size={16} /></button>
+                  <h3 className="font-bold text-white mb-4 uppercase tracking-wider text-sm">Create New Tournament</h3>
+                  <form onSubmit={createTournament} className="space-y-4">
+                    <input
+                      type="text"
+                      placeholder="Tournament Name"
+                      className="w-full p-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-blue-500 outline-none"
+                      value={newTName} onChange={e => setNewTName(e.target.value)} required
+                    />
+                    <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={newTIsPublic}
+                        onChange={e => setNewTIsPublic(e.target.checked)}
+                        className="w-4 h-4 bg-slate-900 rounded border-slate-700"
+                      />
+                      Make Public (Listing in search)
+                    </label>
+                    <button type="submit" className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg uppercase tracking-wider text-xs">
+                      Initialize Tournament
+                    </button>
+                  </form>
+                </GlassCard>
+              )}
+
+              <div className="space-y-4">
+                {myTournaments.length === 0 && <p className="text-center text-slate-500 italic py-8">You haven't created any tournaments yet.</p>}
+                {myTournaments.map(t => (
+                  <GlassCard key={t.id} className="p-5 flex justify-between items-center group">
+                    <div>
+                      <h3 className="font-bold text-lg text-white flex items-center gap-2">
+                        {t.name} {!t.isPublic && <Lock size={12} className="text-slate-500" />}
+                      </h3>
+                      <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">ID: {t.id}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => copyLink(t.id)} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded font-bold text-[10px] uppercase tracking-wider border border-white/5 transition-colors">
+                        Share
+                      </button>
+                      <button onClick={() => openTournament(t.id, true)} className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded font-bold text-xs uppercase tracking-wider transition-colors shadow-lg">
+                        Manage
+                      </button>
+                    </div>
+                  </GlassCard>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [appId, setAppId] = useState(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('t') || '';
+  });
   const [teams, setTeams] = useState([]);
   const [players, setPlayers] = useState([]);
   const [matches, setMatches] = useState([]);
   const [config, setAppConfig] = useState(DEFAULT_CONFIG);
-  const [view, setView] = useState('public');
+  const [view, setView] = useState('landing');
   const [activeTab, setActiveTab] = useState('standings');
   const [adminTab, setAdminTab] = useState('fixtures');
   const [loginInput, setLoginInput] = useState('');
   const [scorerMatchId, setScorerMatchId] = useState(null);
 
+  // set view on load based on appId
+  useEffect(() => {
+    if (appId) {
+      setView('public');
+    } else {
+      setView('landing');
+    }
+  }, [appId]);
+
   // --- Firebase ---
   useEffect(() => {
-    const initAuth = async () => {
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        await signInWithCustomToken(auth, __initial_auth_token);
-      } else {
-        await signInAnonymously(auth);
-      }
-    };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, setUser);
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+    });
+    // try anon auth immediately if not logged in so public reads work
+    signInAnonymously(auth).catch(() => { });
     return () => unsubscribe();
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !appId) return;
     const unsubTeams = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'teams'),
       (snap) => setTeams(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubPlayers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'players'),
@@ -2013,6 +2247,9 @@ export default function App() {
     };
     currentScores[currentSetIndex] = newSetScore;
 
+    const newPointHistory = match.pointHistory ? [...match.pointHistory] : [];
+    newPointHistory.push({ team, setIndex: currentSetIndex });
+
     // RULE SELECTION
     // 1. Try finding stage by ID (Precise)
     const stage = config.stages?.find(s => s.id === match.stageId);
@@ -2060,7 +2297,7 @@ export default function App() {
     const diff = Math.abs(newSetScore.a - newSetScore.b);
     const hasReachedTarget = (newSetScore.a >= targetPoints || newSetScore.b >= targetPoints);
 
-    let updates = { scores: currentScores };
+    let updates = { scores: currentScores, pointHistory: newPointHistory };
 
     if (hasReachedTarget && diff >= 2) {
       const setWinner = newSetScore.a > newSetScore.b ? 'A' : 'B';
@@ -2123,6 +2360,48 @@ export default function App() {
         updates.scores = [...currentScores, { a: 0, b: 0 }];
       }
     }
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', scorerMatchId), updates);
+  };
+
+  const handleUndo = async () => {
+    const match = matches.find(m => m.id === scorerMatchId);
+    if (!match || !match.pointHistory || match.pointHistory.length === 0) return;
+
+    let currentScores = match.scores ? [...match.scores] : [];
+    let newPointHistory = [...match.pointHistory];
+    const lastPoint = newPointHistory.pop();
+
+    if (!lastPoint) return;
+
+    if (currentScores[lastPoint.setIndex]) {
+      currentScores[lastPoint.setIndex] = {
+        ...currentScores[lastPoint.setIndex],
+        [lastPoint.team.toLowerCase()]: Math.max(0, currentScores[lastPoint.setIndex][lastPoint.team.toLowerCase()] - 1)
+      };
+    }
+
+    let updates = { pointHistory: newPointHistory };
+
+    const didWinMatch = match.status === 'finished';
+    // If there's an eager set after the set the point was scored in, we won the set.
+    const didWinSetButNotMatch = match.scores.length > lastPoint.setIndex + 1;
+
+    if (didWinMatch || didWinSetButNotMatch) {
+      updates.setsA = lastPoint.team === 'A' ? Math.max(0, match.setsA - 1) : match.setsA;
+      updates.setsB = lastPoint.team === 'B' ? Math.max(0, match.setsB - 1) : match.setsB;
+
+      if (didWinMatch) {
+        updates.status = 'live';
+        updates.winner = null;
+      }
+
+      if (didWinSetButNotMatch) {
+        currentScores = currentScores.slice(0, lastPoint.setIndex + 1);
+      }
+    }
+
+    updates.scores = currentScores;
+
     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', scorerMatchId), updates);
   };
 
@@ -2231,6 +2510,8 @@ export default function App() {
           // Carry forward matches between qualified teams from previous stages
           const carryMatches = matches.filter(m => {
             if (m.stageId === stage.id) return false;
+            if (m.stage?.toLowerCase().includes('playoff') || m.stage?.toLowerCase().includes('final')) return false;
+            if (m.matchName?.toLowerCase().includes('semi') || m.matchName?.toLowerCase().includes('final') || m.matchName?.toLowerCase().includes('eliminator')) return false;
             if (m.status !== 'finished') return false;
             const isTA = stageTeamIds.includes(m.teamA);
             const isTB = stageTeamIds.includes(m.teamB);
@@ -2251,7 +2532,12 @@ export default function App() {
     if (config.roadmap?.superStageTeams) {
       // If we have legacy config active
       const superTeams = teams.filter(t => config.roadmap.superStageTeams.includes(t.id));
-      calculated.superStage = calculateStats(superTeams, matches);
+      const filteredMatches = matches.filter(m => {
+        if (m.stage?.toLowerCase().includes('playoff') || m.stage?.toLowerCase().includes('final')) return false;
+        if (m.matchName?.toLowerCase().includes('semi') || m.matchName?.toLowerCase().includes('final') || m.matchName?.toLowerCase().includes('eliminator')) return false;
+        return true;
+      });
+      calculated.superStage = calculateStats(superTeams, filteredMatches);
     } else {
       // Try to map from new stages
       const superStage = stages.find(s => s.type === 'league');
@@ -2738,8 +3024,13 @@ export default function App() {
   };
 
   // --- Router ---
-  if (view === 'admin-scorer') return <AdminScorer match={matches.find(m => m.id === scorerMatchId)} teams={teams} config={config} handleScore={handleScore} setView={setView} updateDoc={updateDoc} db={db} appId={appId} />;
-  if (view === 'login') return <div className="min-h-screen"><Navigation config={config} view={view} setView={setView} isAdmin={isAdmin} /><LoginView loginInput={loginInput} setLoginInput={setLoginInput} handleAdminLogin={handleAdminLogin} setView={setView} /></div>;
+  if (view === 'landing') return <LandingPage setAppId={setAppId} setView={setView} hostUser={user} auth={auth} db={db} setIsAdmin={setIsAdmin} />;
+  if (view === 'admin-scorer') return <AdminScorer match={matches.find(m => m.id === scorerMatchId)} teams={teams} config={config} handleScore={handleScore} handleUndo={handleUndo} setView={setView} updateDoc={updateDoc} db={db} appId={appId} />;
+  // legacy admin login via passcode, redirect to landing instead
+  if (view === 'login') {
+    setView('landing');
+    return null;
+  }
 
   return (
     <ErrorBoundary>
